@@ -207,6 +207,16 @@ function sinceMatches(task, window) {
   return task.mtime >= Date.now() - window;
 }
 
+/**
+ * A task is actively worked on when its explicit status says so and its source
+ * file changed during the current hour. This deliberately reads the whole store
+ * rather than the filtered view: the toolbar is an operational signal, not a
+ * summary of whichever slice happens to be open.
+ */
+function activeWorkCount(tasks, now = Date.now()) {
+  return tasks.filter((task) => task.status === "in_progress" && task.mtime >= now - HOUR).length;
+}
+
 const AREA_CHIP_LIMIT = 6;
 
 /**
@@ -329,7 +339,16 @@ function topBar(ctx, view) {
   }
 
   if (meta) {
+    const activeWork = activeWorkCount(ctx.allTasks);
     bar.append(
+      el("div.active-work", {
+        title: `${activeWork} in-progress task${activeWork === 1 ? "" : "s"} touched in the last hour`,
+        "aria-label": `${activeWork} in-progress tasks touched in the last hour`,
+      },
+        el("span.active-work-dot"),
+        el("span.active-work-count", null, num(activeWork)),
+        el("span.active-work-label", null, "ACTIVE · 1H"),
+      ),
       el("div.counts", null,
         el("div", null, el("b", null, num(meta.total)), " tasks"),
         el("div", null,

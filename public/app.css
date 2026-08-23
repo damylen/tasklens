@@ -108,6 +108,16 @@ a:hover { color: #f2b862; }
 .counts b { color: var(--muted); font-weight: 500; }
 .counts .hot { color: var(--accent); }
 
+.active-work {
+  display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--st-in_progress) 38%, var(--line));
+  border-radius: 5px; background: color-mix(in srgb, var(--st-in_progress) 9%, var(--bg));
+  color: var(--st-in_progress); font-family: var(--mono); white-space: nowrap;
+}
+.active-work-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: currentColor; }
+.active-work-count { font-size: 12px; font-weight: 600; }
+.active-work-label { font-size: 9.5px; letter-spacing: 0.55px; color: var(--muted); }
+
 .rail {
   height: var(--rail-h); flex: 0 0 var(--rail-h);
   border-bottom: 1px solid var(--line);
