@@ -6,6 +6,10 @@
     "moduleResolution": "bundler",
     "types": ["bun"],
     "allowImportingTsExtensions": true,
+    // The browser code is plain ES modules; allow the tests to import it
+    // without type-checking it as if it were TypeScript.
+    "allowJs": true,
+    "checkJs": false,
     "verbatimModuleSyntax": true,
     "noEmit": true,
     "strict": true,

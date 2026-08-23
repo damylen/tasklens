@@ -1,6 +1,8 @@
 import { el, clear, svg, ICON } from "../lib/dom.js";
-import { ago, num, statusLabel } from "../lib/format.js";
+import { ago, num } from "../lib/format.js";
 import { virtualList } from "../lib/virtual.js";
+import { createStore } from "../lib/persist.js";
+import { areaLabel } from "../lib/area.js";
 
 const COLUMNS = [
   { key: "open", label: "OPEN" },
@@ -11,14 +13,37 @@ const COLUMNS = [
 
 const CARD_H = 96;
 const GAP = 7;
-const DONE_MODES = [
-  ["list", "List"],
-  ["rail", "Rail"],
-  ["hidden", "Hide"],
-];
+const EXPANDED = "expanded";
+const COLLAPSED = "collapsed";
+const HIDDEN = "hidden";
 
-let doneMode = "list";
+const defaults = () =>
+  Object.fromEntries(COLUMNS.map((c) => [c.key, EXPANDED]));
+
+let columnState = defaults();
+let persisted = null;
 const lists = [];
+
+/**
+ * State is scoped to the backlog being served: tasklens is built to run in
+ * several folders at once, and collapsing a column in one project must not
+ * collapse it in another.
+ */
+function ensureStore(ctx) {
+  const root = ctx.meta?.root || "";
+  if (persisted && persisted.root === root) return;
+  persisted = { root, store: createStore(root) };
+  const saved = persisted.store.read("kanban.columns", null);
+  columnState = saved && typeof saved === "object"
+    ? { ...defaults(), ...saved }
+    : defaults();
+}
+
+function setColumn(key, value, ctx) {
+  columnState[key] = value;
+  persisted?.store.write("kanban.columns", columnState);
+  ctx.rerender();
+}
 
 function card(task, ctx) {
   const colour = `var(--st-${task.status})`;
@@ -28,8 +53,9 @@ function card(task, ctx) {
     el("div.card-hair", { style: { background: colour } }),
     el("div.card-in", null,
       el("div.card-top", null,
-        el("span.card-n", { title: task.duplicateNumber ? `number ${task.number} is shared with another file` : null },
-          task.number + (task.duplicateNumber ? "*" : "")),
+        el("span.card-n", {
+          title: task.duplicateNumber ? `number ${task.number} is shared with another file` : null,
+        }, task.number + (task.duplicateNumber ? "*" : "")),
         el("span.pill", {
           style: { color: `var(--pr-${task.priority})`, borderColor: `var(--pr-${task.priority})` },
         }, task.priority.toUpperCase()),
@@ -39,33 +65,36 @@ function card(task, ctx) {
       ),
       el("div.card-title", { title: task.title }, task.title),
       el("div.card-foot", null,
-        el("span.card-area", { title: task.area }, task.area || "—"),
+        areaLabel(task, ctx),
         el("span.card-agent", null, task.agent),
       ),
     ),
   );
 }
 
-function column(def, tasks, ctx, totals) {
+function collapsedColumn(def, tasks, ctx) {
   const colour = `var(--st-${def.key})`;
-  const isDone = def.key === "done";
+  return el("div.col.rail-mode", {
+    title: `${def.label} — click to expand`,
+    onclick: () => setColumn(def.key, EXPANDED, ctx),
+  },
+    el("div.railcol", null,
+      el("span.dot", { style: { background: colour } }),
+      el("span.railcol-n", { style: { color: colour } }, num(tasks.length)),
+      el("div.railcol-l", null, def.label),
+      el("div.grow"),
+      svg(ICON.expand, { size: 13, stroke: "var(--faint)" }),
+    ),
+  );
+}
 
-  if (isDone && doneMode === "rail") {
-    const node = el("div.col.rail-mode", { onclick: () => { doneMode = "list"; ctx.rerender(); } },
-      el("div.railcol", null,
-        el("span.dot", { style: { background: colour } }),
-        el("span.railcol-n", { style: { color: colour } }, num(tasks.length)),
-        el("div.railcol-l", null, def.label),
-      ),
-    );
-    return node;
-  }
+function expandedColumn(def, tasks, ctx, total) {
+  const colour = `var(--st-${def.key})`;
+  const share = Math.max(2, Math.round((tasks.length / Math.max(1, total)) * 100));
 
-  const share = Math.max(2, Math.round((tasks.length / Math.max(1, totals)) * 100));
   const scroller = el("div.col-scroll");
   const inner = el("div.col-virt");
   scroller.append(inner);
-
   const foot = el("div.col-foot");
 
   const node = el("div.col.wide", null,
@@ -75,6 +104,10 @@ function column(def, tasks, ctx, totals) {
         el("span.col-name", null, def.label),
         el("div.grow"),
         el("span.col-count", { style: { color: colour } }, num(tasks.length)),
+        el("button.colbtn", {
+          title: `collapse ${def.label}`,
+          onclick: (event) => { event.stopPropagation(); setColumn(def.key, COLLAPSED, ctx); },
+        }, svg(ICON.collapse, { size: 13, stroke: "currentColor" })),
       ),
       el("div.col-bar", null, el("span", { style: { width: `${share}%`, background: colour } })),
     ),
@@ -95,7 +128,7 @@ function column(def, tasks, ctx, totals) {
   });
   lists.push(list);
 
-  // Only the big column earns a footer; the rest would just be noise.
+  // Only a column big enough to window earns a footer; the rest would be noise.
   if (tasks.length > 40) {
     const paint = () => {
       const w = list.window();
@@ -114,11 +147,17 @@ function column(def, tasks, ctx, totals) {
 
 function build(ctx) {
   lists.length = 0;
+  ensureStore(ctx);
+
   const board = el("div.board");
   const total = ctx.tasks.length;
+  let shown = 0;
 
   for (const def of COLUMNS) {
-    if (def.key === "done" && doneMode === "hidden") continue;
+    const state = columnState[def.key];
+    if (state === HIDDEN) continue;
+    shown++;
+
     const tasks = ctx.tasks
       .filter((t) => t.status === def.key)
       .sort((a, b) => {
@@ -126,7 +165,17 @@ function build(ctx) {
         const right = b.lastActivity || "";
         return right.localeCompare(left) || a.num - b.num;
       });
-    board.append(column(def, tasks, ctx, total));
+
+    board.append(state === COLLAPSED
+      ? collapsedColumn(def, tasks, ctx)
+      : expandedColumn(def, tasks, ctx, total));
+  }
+
+  if (!shown) {
+    board.append(el("div.empty", null,
+      el("div.big", null, "Every column is hidden"),
+      el("div.small", null, "bring one back from the COLUMNS control above"),
+    ));
   }
   return board;
 }
@@ -134,20 +183,34 @@ function build(ctx) {
 export default {
   id: "kanban",
   label: "Kanban",
-  filters: ["search", "priority", "area"],
+  filters: ["search", "priority", "area", "since"],
 
   toolbar(ctx) {
-    const wrap = el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
-      el("span.rail-label", null, "DONE COLUMN"),
-      el("div.seg.tight", null,
-        DONE_MODES.map(([mode, label]) =>
-          el("button.seg-item" + (doneMode === mode ? ".on" : ""), {
-            onclick: () => { doneMode = mode; ctx.rerender(); },
-          }, label),
-        ),
+    ensureStore(ctx);
+    return el("div", { style: { display: "flex", alignItems: "center", gap: "10px" } },
+      el("span.rail-label", null, "COLUMNS"),
+      el("div.chips", null,
+        COLUMNS.map((def) => {
+          const state = columnState[def.key];
+          const on = state !== HIDDEN;
+          return el("button.chip" + (on ? ".on" : ""), {
+            title: on ? `hide ${def.label}` : `show ${def.label}`,
+            style: on ? { color: `var(--st-${def.key})`, borderColor: "#3d3a31" } : null,
+            onclick: () => setColumn(def.key, on ? HIDDEN : EXPANDED, ctx),
+          }, def.label);
+        }),
       ),
+      el("button.chip", {
+        title: "expand every visible column",
+        onclick: () => {
+          for (const def of COLUMNS) {
+            if (columnState[def.key] === COLLAPSED) columnState[def.key] = EXPANDED;
+          }
+          persisted?.store.write("kanban.columns", columnState);
+          ctx.rerender();
+        },
+      }, "EXPAND ALL"),
     );
-    return wrap;
   },
 
   mount(ctx) {

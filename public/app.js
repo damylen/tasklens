@@ -8,7 +8,7 @@ import "./views/index.js";
 const store = new ClientStore();
 const root = document.getElementById("app");
 
-const filters = { q: "", priority: "all", area: "" };
+const filters = { q: "", priority: "all", area: "", since: 0 };
 let route = { kind: "view", id: defaultViewId() };
 let active = null;      // { view, node }
 let searchInput = null;
@@ -53,6 +53,7 @@ function buildContext() {
   const match = (task) => {
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
     if (!areaMatches(task, filters.area)) return false;
+    if (!sinceMatches(task, filters.since)) return false;
     if (query) {
       const hay = `${task.number} ${task.title} ${task.area} ${task.agent} ${task.id}`.toLowerCase();
       if (!hay.includes(query)) return false;
@@ -78,6 +79,10 @@ function buildContext() {
       filters[key] = value;
       render();
     },
+    toggleArea(path) {
+      filters.area = filters.area === path ? "" : path;
+      render();
+    },
     openTask(id) {
       navigate(`#/task/${encodeURIComponent(id)}`);
     },
@@ -93,6 +98,30 @@ function buildContext() {
 /* ── chrome ──────────────────────────────────────────────── */
 
 const OTHER = "__other__";
+
+const HOUR = 3600e3;
+const DAY = 24 * HOUR;
+
+/**
+ * Recency windows. These read file MTIME, not the dated Agent Notes: notes
+ * carry a date and no clock time, so anything under a day can only come from
+ * when the file itself was last written. The rail says TOUCHED for that reason.
+ */
+const SINCE_WINDOWS = [
+  [0, "ALL"],
+  [HOUR, "1h"],
+  [4 * HOUR, "4h"],
+  [8 * HOUR, "8h"],
+  [DAY, "1d"],
+  [2 * DAY, "2d"],
+  [7 * DAY, "7d"],
+  [30 * DAY, "1m"],
+];
+
+function sinceMatches(task, window) {
+  if (!window) return true;
+  return task.mtime >= Date.now() - window;
+}
 
 const AREA_CHIP_LIMIT = 8;
 
@@ -259,7 +288,7 @@ function areaControl(ctx) {
 function filterRail(ctx, view) {
   const wanted = view?.filters || [];
   const toolbar = view?.toolbar ? view.toolbar(ctx) : null;
-  const hasChips = wanted.includes("priority") || wanted.includes("area");
+  const hasChips = wanted.includes("priority") || wanted.includes("area") || wanted.includes("since");
   if (!hasChips && !toolbar) return null;
 
   const rail = el("div.rail");
@@ -270,8 +299,24 @@ function filterRail(ctx, view) {
     ], filters.priority, (v) => ctx.setFilter("priority", v)));
   }
 
-  if (wanted.includes("area")) {
+  if (wanted.includes("since")) {
     if (wanted.includes("priority")) rail.append(el("div.rail-div"));
+    rail.append(
+      el("span.rail-label", {
+        title: "file modification time — Agent Notes carry a date with no clock time, so anything under a day can only come from when the file was last written",
+      }, "TOUCHED"),
+      el("div.chips", null,
+        SINCE_WINDOWS.map(([window, label]) =>
+          el("button.chip" + (filters.since === window ? ".on" : ""), {
+            onclick: () => ctx.setFilter("since", window),
+          }, label),
+        ),
+      ),
+    );
+  }
+
+  if (wanted.includes("area")) {
+    if (wanted.includes("priority") || wanted.includes("since")) rail.append(el("div.rail-div"));
     rail.append(...areaControl(ctx));
   }
 

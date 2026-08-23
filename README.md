@@ -84,10 +84,12 @@ as the activity date itself.
 
 ## Views
 
-**Kanban** — four columns, filtered by priority and agent. Every column is
-windowed, so a Done column with several thousand cards costs the same as an
-empty one. The Done column can be switched between `List`, a collapsed `Rail`,
-and `Hide`.
+**Kanban** — four columns, every one of them windowed, so a Done column holding
+several thousand cards costs the same as an empty one. Each column collapses to
+a narrow rail from its own header and can be hidden entirely from the `COLUMNS`
+control; both are remembered per backlog in local storage, so a board comes back
+the way you left it. Storage that refuses to work (private browsing, exhausted
+quota) degrades to in-memory state rather than breaking the board.
 
 **Timeline** — one row per dated note, newest first, grouped by day. `Show`
 switches between all activity, status changes, and completions. Because a note
@@ -103,13 +105,31 @@ with open dependants outranks a finished one.
 status, the full note history, and a rail carrying relations, references and
 file stats.
 
+### Filtering by recency
+
+The `TOUCHED` control offers `1h`, `4h`, `8h`, `1d`, `2d`, `7d` and `1m`. It
+reads **file modification time**, not the dated notes: an Agent Note carries a
+date with no clock time, so anything under a day can only come from when the
+file was last written. The label says `TOUCHED` rather than something about
+activity for exactly that reason.
+
 ### Filtering by area
 
 `Area:` is the most useful axis for "which part of the system is this", but it
 is free text and a real backlog collects over a thousand distinct values, so the
 rail drills one level at a time — pick `web`, then `app`, then `editor` —
 with the long tail collapsed into `OTHER` and each level showing its task count.
-The selected path is a breadcrumb of chips; clicking one pops back to it.
+The selected path is a breadcrumb of chips; clicking one pops back to it. The
+area shown on any card, timeline row or group row is itself a control: click it
+to filter to that area, click it again to clear.
+
+Whitespace separates the same way a slash does, so `web/app editor` is
+`web` > `app` > `editor`. That deliberately also splits prose areas like
+`scenario media simulation`, which reads oddly at the deepest level but groups
+that work with the rest of `scenario` — which is the point of the axis. Treating
+whitespace as literal instead doubled the number of top-level groups on the
+backlog this was built against, pushing far more of them out of reach into
+`OTHER`.
 
 Areas also drift between `/` and `-` as separators. A dashed head token folds
 onto its slash form **only when both halves independently exist as a real path
@@ -169,8 +189,14 @@ entry is the default view.
 [`public/lib/registry.js`](public/lib/registry.js).
 
 `filters` lists the shared controls the chrome should render for that view:
-`"search"`, `"priority"`, `"area"`. Declaring none gives a view the rail to
-itself via `toolbar()`.
+`"search"`, `"priority"`, `"since"`, `"area"`. Declaring none gives a view the
+rail to itself via `toolbar()`. `ctx.toggleArea(path)` is what makes an area
+label clickable; a view that shows areas should use `areaLabel()` from
+`public/lib/area.js` rather than rendering the string itself.
+
+View state that should outlive a reload goes through `createStore(root)` in
+`public/lib/persist.js`. It is namespaced by the backlog path, so a view running
+against two folders keeps two sets of state.
 
 ## Live updates
 

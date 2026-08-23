@@ -1,5 +1,6 @@
 import { el } from "../lib/dom.js";
 import { dayDate, dayLabel, daysAgo, num, statusLabel } from "../lib/format.js";
+import { areaLabel } from "../lib/area.js";
 
 const SHOW_MODES = [
   ["all", "All activity"],
@@ -48,7 +49,7 @@ function entryNode(entry, ctx) {
       el("div.entry-head", null,
         el("span.entry-n", null, task.number),
         el("span.entry-title", null, task.title),
-        el("span.entry-area", null, task.area || ""),
+        areaLabel(task, ctx, { className: "entry-area" }),
       ),
       el("div.entry-note", null, entry.text || "(no text)"),
       el("div.entry-foot", null,
@@ -145,7 +146,7 @@ function build(ctx) {
 export default {
   id: "timeline",
   label: "Timeline",
-  filters: ["search", "area"],
+  filters: ["search", "area", "since"],
 
   toolbar(ctx) {
     return el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },

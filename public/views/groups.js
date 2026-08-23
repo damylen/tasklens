@@ -1,5 +1,6 @@
 import { el, svg, ICON } from "../lib/dom.js";
 import { ago, num, statusLabel } from "../lib/format.js";
+import { areaLabel } from "../lib/area.js";
 
 const MODES = [
   ["parent", "By parent"],
@@ -61,6 +62,7 @@ function branch(task, ctx, depth, visible) {
       el("span.hair", { style: { background: `var(--st-${task.status})` } }),
       el("span.n", null, task.number),
       el("span.t", { title: task.title }, task.title),
+      areaLabel(task, ctx, { className: "row-area" }),
       task.rollup ? el("span.rollcount", null, `${task.rollup.done}/${task.rollup.total}`) : null,
       rollupBar(task.rollup),
       statusChip(task),
@@ -150,6 +152,7 @@ function byBlocking(ctx) {
         el("span.hair", { style: { background: `var(--st-${task.status})` } }),
         el("span.n", null, task.number),
         el("span.t", { title: task.title }, task.title),
+        areaLabel(task, ctx, { className: "row-area" }),
         el("span.blockcount", {
           style: live ? { color: "var(--st-blocked)", borderColor: "var(--st-blocked)" } : null,
           title: `${row.openWaiters.length} unfinished of ${row.waiters.length} waiting`,
@@ -226,7 +229,7 @@ function build(ctx) {
 export default {
   id: "groups",
   label: "Groups",
-  filters: ["search", "priority", "area"],
+  filters: ["search", "priority", "area", "since"],
 
   toolbar(ctx) {
     return el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
