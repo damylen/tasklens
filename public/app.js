@@ -499,9 +499,9 @@ function render(options = {}) {
   if (route.kind === "overview") {
     clear(root);
     root.append(topBar({ allTasks: [], meta: null }, null));
-    root.append(renderOverview(store.listBacklogs(), (backlog) => {
+    root.append(renderOverview(store.listBacklogs(), (backlog, view) => {
       selectBacklog(backlog);
-      navigate(backlogHash(backlog));
+      navigate(backlogHash(backlog, view));
     }, (label, dir) => store.addBacklog(label, dir)));
     return;
   }
