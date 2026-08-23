@@ -29,16 +29,21 @@ let searchInput = null;
 
 function readHash() {
   const raw = location.hash.replace(/^#\/?/, "");
-  const [head, tail] = raw.split("/");
+  const slash = raw.indexOf("/");
+  const head = slash === -1 ? raw : raw.slice(0, slash);
+  const tail = slash === -1 ? "" : raw.slice(slash + 1);
   if (head === "task" && tail) return { kind: "task", key: decodeURIComponent(tail) };
-  if (head && getView(head)?.id === head) return { kind: "view", id: head };
-  return { kind: "view", id: defaultViewId() };
+  // A view may carry a parameter, e.g. #/files/src/app.ts, handed to it as ctx.param.
+  if (head && getView(head)?.id === head) {
+    return { kind: "view", id: head, param: tail ? decodeURIComponent(tail) : null };
+  }
+  return { kind: "view", id: defaultViewId(), param: null };
 }
 
 function applyHash() {
   const next = readHash();
   const changedKind = next.kind !== route.kind;
-  const changedView = next.kind === "view" && next.id !== route.id;
+  const changedView = next.kind === "view" && (next.id !== route.id || next.param !== route.param);
   if (next.kind === "task") resetDetailState();
   route = next;
   if (changedKind || changedView) teardown();
@@ -87,6 +92,7 @@ function buildContext() {
     allNotes,
     filters,
     meta: store.meta,
+    param: route.kind === "view" ? route.param : null,
     store,
     persist: ensurePersist(),
     setFilter(key, value) {
@@ -96,6 +102,12 @@ function buildContext() {
     toggleArea(path) {
       filters.area = filters.area === path ? "" : path;
       render();
+    },
+    goView(id) {
+      navigate(`#/${id}`);
+    },
+    goFile(path) {
+      navigate(`#/files/${encodeURIComponent(path)}`);
     },
     openTask(id) {
       navigate(`#/task/${encodeURIComponent(id)}`);

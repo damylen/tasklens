@@ -397,3 +397,12 @@ a:hover { color: #f2b862; }
   padding: 6px 20px;
 }
 .detail-toggle { margin-left: 6px; }
+
+/* ── files view ─────────────────────────────────────────── */
+.filepath {
+  font-family: var(--mono); font-size: 12px; color: var(--text);
+  flex-grow: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.filelist { display: flex; flex-direction: column; gap: 4px; }
+.filerow-files { display: flex; flex-direction: column; gap: 4px; }

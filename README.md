@@ -101,9 +101,32 @@ umbrella tasks as a tree with a rollup bar per branch; `By dependency` ranks the
 tasks something else is waiting on, real bottlenecks first — an unfinished task
 with open dependants outranks a finished one.
 
+**Files** — which tasks touched which source file. At the top sits a
+`CONTENDED` section: files that two or more **unfinished** tasks are all
+pointing at. A finished task naming a file is history; several unfinished ones
+naming the same file is a collision worth knowing about before you start.
+
 **Task detail** — the rendered sections, the subtask list with each child's real
-status, the full note history, and a rail carrying relations, references and
-file stats.
+status, the full note history, and a rail carrying relations, the files the task
+names, references and file stats. A file marked in that panel is one other
+unfinished tasks also name; clicking it opens the Files view on that file.
+
+### How files are found
+
+Only backticked spans and markdown link targets count, against a closed list of
+extensions. That is deliberate: matching bare prose finds `Three.js`, which is a
+library, and `0.7.8`, which is a version. Task cross-references (`TASKS/…`, any
+`.md`) are skipped — those are relations and already have edges through
+`Parent:` and `Depends on:`.
+
+One file gets written many ways — `Editor.vue`, `src/components/Editor.vue`
+and an absolute path can all be one file. A short path folds onto a longer one
+when it is a true suffix on segment boundaries **and exactly one maximal
+candidate exists**, so a basename that two unrelated trees both use stays two
+files instead of being silently merged. Among the spellings of one file, the
+representative is the most useful rather than the longest: a repo-relative path
+beats an absolute one, which would otherwise win on length and put someone's
+home directory in the UI.
 
 ### The three chrome rows
 

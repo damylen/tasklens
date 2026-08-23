@@ -7,7 +7,9 @@ import { register } from "../lib/registry.js";
 import kanban from "./kanban.js";
 import timeline from "./timeline.js";
 import groups from "./groups.js";
+import files from "./files.js";
 
 register(kanban);
 register(timeline);
 register(groups);
+register(files);

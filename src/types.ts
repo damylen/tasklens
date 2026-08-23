@@ -63,6 +63,15 @@ export interface Task {
    */
   areaPaths: string[];
 
+  /** Source files named in the document, normalized but not yet folded. */
+  fileRefs: string[];
+  /**
+   * Canonical files this task touches. Folded across the whole set by the
+   * store, because `Editor.vue` and `web/src/components/Editor.vue` are one
+   * file and only the full set knows that.
+   */
+  files: string[];
+
   /** Referenced task NUMBERS, resolved to ids by the store. */
   parent: string | null;
   dependsOn: string[];
@@ -102,6 +111,10 @@ export interface Meta {
   total: number;
   /** Dashed area names folded onto their slash equivalent. */
   areaFolds: number;
+  /** File paths folded onto a longer path naming the same file. */
+  fileFolds: number;
+  /** Distinct canonical files named across the backlog. */
+  fileCount: number;
   noteCount: number;
   warnings: Warning[];
 }

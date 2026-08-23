@@ -144,6 +144,55 @@ function parseSubtasks(body: string): Subtask[] {
   return out;
 }
 
+/**
+ * File extensions worth indexing. Deliberately a closed list: matching any
+ * dotted token would pull in version numbers (`0.7.8`) and library names
+ * (`Three.js` is prose, not a file).
+ */
+const FILE_EXT = "js|mjs|cjs|jsx|ts|tsx|mts|cts|py|pyi|vue|svelte|html|htm" +
+  "|css|scss|sass|less|json|yaml|yml|toml|ini|cfg|conf|sh|bash|sql|env";
+
+/**
+ * Only backticked spans and markdown link targets count. Bare prose mentions
+ * are too noisy to index — measured against a real backlog, matching bare text
+ * produced library names far more often than filenames.
+ */
+const FILE_PATTERNS = [
+  new RegExp("`([^`\\s]{2,120}\\.(?:" + FILE_EXT + "))`", "g"),
+  new RegExp("\\]\\(([^)\\s]{2,120}\\.(?:" + FILE_EXT + "))\\)", "g"),
+  /`(\.env(?:\.[a-z0-9]+)?)`/g,
+];
+
+/** Strip the ways the same path gets written: URLs, absolute roots, `$VAR/`, `../`. */
+function normalizeFilePath(raw: string): string | null {
+  let value = raw.trim();
+  value = value.replace(/^file:\/\/+/i, "");
+  value = value.replace(/^[~$][A-Za-z_{}]*\//, "");
+  value = value.replace(/^(?:\.\.\/)+/, "");
+  value = value.replace(/^\.\//, "");
+  value = value.replace(/^\/+/, "");
+  value = value.replace(/[),.;:]+$/, "");
+  if (!value || value.includes("*")) return null;
+  // Task cross-references are relations, not source files; they already have
+  // their own edges through Parent and Depends on.
+  if (/^TASKS\//i.test(value) || /\.md$/i.test(value)) return null;
+  if (value.length > 160) return null;
+  return value;
+}
+
+function parseFileRefs(text: string): string[] {
+  const out = new Set<string>();
+  for (const pattern of FILE_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      const value = normalizeFilePath(match[1] ?? "");
+      if (value) out.add(value);
+    }
+  }
+  return [...out].sort();
+}
+
 const NOTE_START = /^\s*[-*]\s+(\d{4}-\d{2}-\d{2})(.*)$/;
 
 /**
@@ -364,6 +413,8 @@ export function parseTask(input: ParseInput): ParseResult {
     area,
     areas: area ? area.split(",").map((a) => a.trim()).filter(Boolean) : [],
     areaPaths: [],
+    fileRefs: parseFileRefs(text),
+    files: [],
     parent: taskNumbers(fields["parent"] ?? "")[0] ?? null,
     dependsOn: taskNumbers(fields["dependson"] ?? ""),
     references: parseReferences(fields["references"] ?? ""),

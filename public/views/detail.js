@@ -261,6 +261,51 @@ function referencePanel(task) {
   );
 }
 
+/**
+ * Files the task's own text names. Each one routes into the Files view opened
+ * on that file, which is where the other tasks touching it are listed.
+ */
+function filePanel(task, ctx) {
+  if (!task.files.length) return null;
+
+  // Which of these files other unfinished tasks are also pointing at.
+  const contended = new Map();
+  for (const other of ctx.allTasks) {
+    if (other.id === task.id || other.status === "done") continue;
+    for (const file of other.files) {
+      if (task.files.includes(file)) contended.set(file, (contended.get(file) || 0) + 1);
+    }
+  }
+
+  return el("div.panel", { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+    el("div", { style: { display: "flex", alignItems: "baseline", gap: "8px" } },
+      el("span.sec-name", null, "FILES"),
+      el("span.sec-hint", null, String(task.files.length)),
+    ),
+    el("div", { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+      task.files.map((file) => {
+        const others = contended.get(file) || 0;
+        return el("div.reffile", {
+          title: others ? `${others} other unfinished task${others === 1 ? "" : "s"} also name this file` : file,
+          onclick: () => ctx.goFile(file),
+        },
+          svg(ICON.file, { size: 12, stroke: others ? "var(--st-blocked)" : "var(--muted)" }),
+          el("span.filepath", { style: { fontSize: "10.5px" } }, file),
+          others
+            ? el("span.blockcount", {
+                style: { color: "var(--st-blocked)", borderColor: "var(--st-blocked)" },
+              }, `+${others}`)
+            : null,
+        );
+      }),
+    ),
+    contended.size
+      ? el("span", { style: { fontSize: "11px", lineHeight: "1.5", color: "var(--faint)" } },
+          "Marked files are also named by unfinished tasks elsewhere.")
+      : null,
+  );
+}
+
 function activityPanel(task) {
   const dates = task.notes.map((n) => n.date).sort();
   const first = dates[0];
@@ -340,6 +385,7 @@ export function renderDetail(task, ctx) {
       ),
       el("div.detail-rail", null,
         relationPanel(task, ctx),
+        filePanel(task, ctx),
         referencePanel(task),
         activityPanel(task),
       ),

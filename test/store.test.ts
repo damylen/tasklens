@@ -324,3 +324,77 @@ describe("area paths", () => {
     expect(store.get("0001-a")!.areaPaths).toEqual([]);
   });
 });
+
+describe("file graph", () => {
+  const withText = (n: string, body: string) =>
+    `# ${n} Task ${n}\n\nStatus: open\nPriority: high\nAgent: Alice\nArea: demo\n\n## Context\n${body}\n\n## Agent Notes\n- 2026-02-01: made\n`;
+
+  // Bare prose mentions are what make a naive extractor useless: `Three.js` is
+  // a library, `0.7.8` is a version. Only backticks and link targets count.
+  test("takes backticked paths and link targets, and nothing else", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001",
+        "Touches `src/app.ts` and [the config](config/settings.yaml).\n" +
+        "We upgraded Three.js to 0.7.8 and looked at app.ts in passing."),
+    });
+    expect(store.get("0001-a")!.files).toEqual(["config/settings.yaml", "src/app.ts"]);
+  });
+
+  // The same file is written three ways in one backlog. Left unfolded the graph
+  // fragments and the contention warning under-reports.
+  test("folds a short spelling onto the full path", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001", "See `web/src/components/Editor.vue`."),
+      "0002-b.md": withText("0002", "See `Editor.vue`."),
+      "0003-c.md": withText("0003", "See `src/components/Editor.vue`."),
+    });
+    const all = ["0001-a", "0002-b", "0003-c"].map((id) => store.get(id)!.files[0]);
+    expect(new Set(all).size).toBe(1);
+    expect(all[0]).toBe("web/src/components/Editor.vue");
+  });
+
+  // The guard against over-folding: one basename, two unrelated trees.
+  test("keeps one basename apart when two unrelated trees claim it", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001", "`client/src/chat/ChatMessage.vue`"),
+      "0002-b.md": withText("0002", "`packages/ui/src/chat/ChatMessage.vue`"),
+      "0003-c.md": withText("0003", "`ChatMessage.vue`"),
+    });
+    expect(store.get("0001-a")!.files).toEqual(["client/src/chat/ChatMessage.vue"]);
+    expect(store.get("0002-b")!.files).toEqual(["packages/ui/src/chat/ChatMessage.vue"]);
+    // Ambiguous on its own, so it stays its own node rather than being guessed.
+    expect(store.get("0003-c")!.files).toEqual(["ChatMessage.vue"]);
+  });
+
+  // An absolute path is the longest spelling and therefore wins a naive
+  // longest-wins rule, which would put a workstation path in the UI.
+  test("prefers a repo-relative spelling over an absolute one", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001", "`/home/ci/build/proj/src/core/engine.py`"),
+      "0002-b.md": withText("0002", "`src/core/engine.py`"),
+    });
+    expect(store.get("0001-a")!.files).toEqual(["src/core/engine.py"]);
+    expect(store.get("0002-b")!.files).toEqual(["src/core/engine.py"]);
+  });
+
+  test("normalizes the ways one path gets written", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001", "`./src/a.ts` `$PROJECT_DIR/src/b.ts` `../../src/c.ts`"),
+    });
+    expect(store.get("0001-a")!.files).toEqual(["src/a.ts", "src/b.ts", "src/c.ts"]);
+  });
+
+  // Task cross-references are relations, not source files; they already have
+  // edges through Parent and Depends on.
+  test("ignores task files and markdown", async () => {
+    const store = await fixture({
+      "0001-a.md": withText("0001", "See `TASKS/0002-other.md` and `README.md` and `src/real.ts`."),
+    });
+    expect(store.get("0001-a")!.files).toEqual(["src/real.ts"]);
+  });
+
+  test("a task naming no files has none rather than an empty string", async () => {
+    const store = await fixture({ "0001-a.md": withText("0001", "No files here.") });
+    expect(store.get("0001-a")!.files).toEqual([]);
+  });
+});

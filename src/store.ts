@@ -46,6 +46,7 @@ export class TaskStore {
   private sweep: ReturnType<typeof setInterval> | null = null;
   private flushing = false;
   private areaFolds = 0;
+  private fileFolds = 0;
   private scannedAt = 0;
 
   constructor(root: string) {
@@ -129,6 +130,101 @@ export class TaskStore {
     return folds.size;
   }
 
+  /**
+   * The same file gets written many ways across a backlog: `Editor.vue`,
+   * `web/src/components/Editor.vue`, and sometimes an
+   * absolute workstation path. A short path folds onto a longer one only when
+   * it is a true suffix on segment boundaries AND exactly one maximal
+   * candidate exists — so `ChatMessage.vue`, which genuinely exists under two
+   * unrelated trees, stays two files rather than being silently merged.
+   */
+  private deriveFiles(): number {
+    const universe = new Set<string>();
+    for (const task of this.tasks.values()) {
+      for (const ref of task.fileRefs) universe.add(ref);
+    }
+
+    const segments = new Map<string, string[]>();
+    for (const path of universe) segments.set(path, path.split("/"));
+
+    // Index by basename so suffix candidates are found without an N^2 sweep.
+    const byBase = new Map<string, string[]>();
+    for (const path of universe) {
+      const parts = segments.get(path)!;
+      const base = parts[parts.length - 1]!;
+      const list = byBase.get(base);
+      if (list) list.push(path);
+      else byBase.set(base, [path]);
+    }
+
+    const isSuffix = (short: string, long: string): boolean => {
+      const a = segments.get(short)!;
+      const b = segments.get(long)!;
+      if (a.length >= b.length) return false;
+      for (let i = 1; i <= a.length; i++) {
+        if (a[a.length - i] !== b[b.length - i]) return false;
+      }
+      return true;
+    };
+
+    // Group every spelling of one file together, then pick the representative
+    // by usefulness rather than by length: an absolute workstation path is the
+    // longest but the worst name to show, so a repo-relative spelling wins.
+    const parent = new Map<string, string>();
+    for (const path of universe) {
+      const parts = segments.get(path)!;
+      const siblings = byBase.get(parts[parts.length - 1]!) ?? [];
+      const longer = siblings.filter((other) => isSuffix(path, other));
+      const maximal = longer.filter((a) => !longer.some((b) => isSuffix(a, b)));
+      // Several unrelated trees claim this basename: keep it as its own file.
+      parent.set(path, maximal.length === 1 ? maximal[0]! : path);
+    }
+
+    const rootOf = (path: string): string => {
+      let current = path;
+      for (let guard = 0; guard < 32; guard++) {
+        const next = parent.get(current) ?? current;
+        if (next === current) break;
+        current = next;
+      }
+      return current;
+    };
+
+    const classes = new Map<string, string[]>();
+    for (const path of universe) {
+      const key = rootOf(path);
+      const list = classes.get(key);
+      if (list) list.push(path);
+      else classes.set(key, [path]);
+    }
+
+    const workstationRooted = (path: string) =>
+      /^(?:Users|home|root|Documents|Desktop|var|tmp|private|opt|mnt|srv|[A-Za-z]:)\//.test(path);
+
+    const canonical = new Map<string, string>();
+    let folded = 0;
+    for (const members of classes.values()) {
+      const best = members.slice().sort((a, b) => {
+        const rooted = Number(workstationRooted(a)) - Number(workstationRooted(b));
+        if (rooted) return rooted;
+        const depth = segments.get(b)!.length - segments.get(a)!.length;
+        if (depth) return depth;
+        return a.localeCompare(b);
+      })[0]!;
+      for (const member of members) {
+        canonical.set(member, best);
+        if (member !== best) folded++;
+      }
+    }
+
+    for (const task of this.tasks.values()) {
+      const seen = new Set<string>();
+      for (const ref of task.fileRefs) seen.add(canonical.get(ref) ?? ref);
+      task.files = [...seen].sort();
+    }
+    return folded;
+  }
+
   /** Every id claiming a task number, so an ambiguous reference can show all of them. */
   resolve(number: string): Task[] {
     const ids = this.numbers.get(number.padStart(4, "0")) ?? [];
@@ -160,6 +256,7 @@ export class TaskStore {
     }
 
     this.areaFolds = this.deriveAreas();
+    this.fileFolds = this.deriveFiles();
 
     for (const task of this.tasks.values()) {
       task.children = [];
@@ -224,6 +321,8 @@ export class TaskStore {
       counts,
       total: this.tasks.size,
       areaFolds: this.areaFolds,
+      fileFolds: this.fileFolds,
+      fileCount: new Set([...this.tasks.values()].flatMap((t) => t.files)).size,
       noteCount,
       warnings: this.warnings,
     };
