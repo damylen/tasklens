@@ -3,7 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { readFile } from "node:fs/promises";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { TaskStore } from "./store.ts";
+import type { WorkspaceStore } from "./workspace.ts";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "public");
 
@@ -15,13 +15,19 @@ const MIME: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
 };
 
-export function createApp(store: TaskStore): Hono {
+export function createApp(workspace: WorkspaceStore): Hono {
   const app = new Hono();
 
-  app.get("/api/tasks", (c) =>
-    c.json({ tasks: store.list(), meta: store.meta() }));
+  app.get("/api/backlogs", (c) => c.json({
+    backlogs: workspace.list().map((backlog) => ({
+      ...backlog,
+      tasks: workspace.get(backlog.id)?.list() ?? [],
+    })),
+  }));
 
-  app.get("/api/tasks/:key", (c) => {
+  app.get("/api/backlogs/:backlog/tasks/:key", (c) => {
+    const store = workspace.get(c.req.param("backlog"));
+    if (!store) return c.json({ error: "backlog not found" }, 404);
     const key = c.req.param("key");
     const task = store.get(key);
     if (!task) return c.json({ error: "not found" }, 404);
@@ -34,6 +40,8 @@ export function createApp(store: TaskStore): Hono {
    * is resolved inside the tasks root and rejected if it escapes it.
    */
   app.get("/api/reference", async (c) => {
+    const store = workspace.get(c.req.query("backlog") || "");
+    if (!store) return c.json({ error: "backlog not found" }, 404);
     const target = c.req.query("path");
     if (!target) return c.json({ error: "path required" }, 400);
 
@@ -60,11 +68,11 @@ export function createApp(store: TaskStore): Hono {
 
       // The client refetches /api/tasks on every open, so a reconnect after a
       // missed delta resyncs rather than drifting.
-      await send("hello", { root: store.root, meta: store.meta() });
+      await send("hello", { backlogs: workspace.list() });
 
       const queue: Array<[string, unknown]> = [];
-      const unsubscribe = store.subscribe((change, meta) => {
-        queue.push(["change", { change, meta }]);
+      const unsubscribe = workspace.subscribe((backlog, change) => {
+        queue.push(["change", { backlog, change }]);
       });
 
       stream.onAbort(() => {

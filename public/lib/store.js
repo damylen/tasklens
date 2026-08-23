@@ -8,6 +8,8 @@ export class ClientStore {
   constructor() {
     this.tasks = new Map();
     this.meta = null;
+    this.backlogs = new Map();
+    this.activeBacklog = null;
     this.connected = false;
     this.fresh = new Set();
     this.listeners = new Set();
@@ -53,12 +55,31 @@ export class ClientStore {
   }
 
   async load() {
-    const response = await fetch("/api/tasks");
-    if (!response.ok) throw new Error(`tasks request failed: ${response.status}`);
+    const response = await fetch("/api/backlogs");
+    if (!response.ok) throw new Error(`backlogs request failed: ${response.status}`);
     const data = await response.json();
-    this.tasks = new Map(data.tasks.map((t) => [t.id, t]));
-    this.meta = data.meta;
+    this.backlogs = new Map((data.backlogs || []).map((backlog) => [backlog.id, {
+      ...backlog, tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])),
+    }]));
+    if (!this.activeBacklog || !this.backlogs.has(this.activeBacklog)) {
+      this.activeBacklog = data.backlogs?.[0]?.id || null;
+    }
+    this.select(this.activeBacklog, false);
     this.emit("load");
+  }
+
+  select(id, notify = true) {
+    const backlog = this.backlogs.get(id);
+    if (!backlog) return false;
+    this.activeBacklog = id;
+    this.tasks = backlog.tasks;
+    this.meta = backlog.meta;
+    if (notify) this.emit("select");
+    return true;
+  }
+
+  listBacklogs() {
+    return [...this.backlogs.values()];
   }
 
   connect() {
@@ -87,20 +108,26 @@ export class ClientStore {
       } catch {
         return;
       }
-      const { change, meta } = payload;
-      if (meta) this.meta = meta;
+      const { backlog, change } = payload;
+      if (!backlog?.id || !change) return;
+      let source = this.backlogs.get(backlog.id);
+      if (!source) {
+        source = { ...backlog, tasks: new Map() };
+        this.backlogs.set(backlog.id, source);
+      } else Object.assign(source, backlog);
 
       if (change.type === "upsert") {
         for (const task of change.tasks) {
-          this.tasks.set(task.id, task);
-          this.fresh.add(task.id);
+          source.tasks.set(task.id, task);
+          if (backlog.id === this.activeBacklog) this.fresh.add(task.id);
         }
       } else if (change.type === "remove") {
         for (const id of change.numbers) {
-          this.tasks.delete(id);
-          this.fresh.delete(id);
+          source.tasks.delete(id);
+          if (backlog.id === this.activeBacklog) this.fresh.delete(id);
         }
       }
+      if (backlog.id === this.activeBacklog) this.select(backlog.id, false);
       this.scheduleFade();
       this.emit("change");
     });

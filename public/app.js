@@ -4,6 +4,7 @@ import { ClientStore } from "./lib/store.js";
 import { createStore } from "./lib/persist.js";
 import { allViews, defaultViewId, getView } from "./lib/registry.js";
 import { renderDetail, detailCrumb, resetDetailState } from "./views/detail.js";
+import { renderOverview } from "./views/overview.js";
 import "./views/index.js";
 
 const store = new ClientStore();
@@ -77,7 +78,13 @@ function restoreState(tasks) {
   const view = store_.read("chrome.view", null);
   if (typeof view === "string" && getView(view)?.id === view) lastView = view;
 }
-let route = { kind: "view", id: defaultViewId() };
+
+function selectBacklog(id) {
+  if (!store.select(id, false)) return false;
+  if (persist?.root !== store.meta?.root) restoreState(store.list());
+  return true;
+}
+let route = { kind: "overview", backlog: null };
 let active = null;      // { view, node }
 let searchInput = null;
 
@@ -85,21 +92,29 @@ let searchInput = null;
 
 function readHash() {
   const raw = location.hash.replace(/^#\/?/, "");
-  const slash = raw.indexOf("/");
-  const head = slash === -1 ? raw : raw.slice(0, slash);
-  const tail = slash === -1 ? "" : raw.slice(slash + 1);
-  if (head === "task" && tail) return { kind: "task", key: decodeURIComponent(tail) };
+  const parts = raw.split("/").filter(Boolean).map(decodeURIComponent);
+  if (!parts.length || parts[0] === "overview") return { kind: "overview", backlog: null };
+  if (parts[0] === "b" && parts[1]) {
+    const backlog = parts[1];
+    if (parts[2] === "task" && parts[3]) return { kind: "task", backlog, key: parts[3] };
+    if (parts[2] && getView(parts[2])?.id === parts[2]) return { kind: "view", backlog, id: parts[2], param: parts[3] || null };
+    return { kind: "view", backlog, id: defaultViewId(), param: null };
+  }
+  const head = parts[0] || "";
+  const tail = parts.slice(1).join("/");
+  if (head === "task" && tail) return { kind: "task", backlog: null, key: tail };
   // A view may carry a parameter, e.g. #/files/src/app.ts, handed to it as ctx.param.
   if (head && getView(head)?.id === head) {
-    return { kind: "view", id: head, param: tail ? decodeURIComponent(tail) : null };
+    return { kind: "view", backlog: null, id: head, param: tail || null };
   }
-  return { kind: "view", id: defaultViewId(), param: null };
+  return { kind: "overview", backlog: null };
 }
 
 function applyHash() {
   const next = readHash();
+  if (next.backlog) selectBacklog(next.backlog);
   const changedKind = next.kind !== route.kind;
-  const changedView = next.kind === "view" && (next.id !== route.id || next.param !== route.param);
+  const changedView = next.kind === "view" && (next.id !== route.id || next.param !== route.param || next.backlog !== route.backlog);
   if (next.kind === "task") resetDetailState();
   route = next;
   if (changedKind || changedView) teardown();
@@ -109,6 +124,10 @@ function applyHash() {
 function navigate(hash) {
   if (location.hash === hash) applyHash();
   else location.hash = hash;
+}
+
+function backlogHash(backlog, view = defaultViewId()) {
+  return `#/b/${encodeURIComponent(backlog)}/${view}`;
 }
 
 function teardown() {
@@ -148,6 +167,7 @@ function buildContext() {
     allNotes,
     filters,
     meta: store.meta,
+    backlog: store.backlogs.get(store.activeBacklog),
     param: route.kind === "view" ? route.param : null,
     store,
     persist: ensurePersist(),
@@ -162,16 +182,16 @@ function buildContext() {
       render();
     },
     goView(id) {
-      navigate(`#/${id}`);
+      navigate(backlogHash(store.activeBacklog, id));
     },
     goFile(path) {
-      navigate(`#/files/${encodeURIComponent(path)}`);
+      navigate(`${backlogHash(store.activeBacklog, "files")}/${encodeURIComponent(path)}`);
     },
     openTask(id) {
-      navigate(`#/task/${encodeURIComponent(id)}`);
+      navigate(`#/b/${encodeURIComponent(store.activeBacklog)}/task/${encodeURIComponent(id)}`);
     },
     goBack() {
-      navigate(`#/${lastView || defaultViewId()}`);
+      navigate(backlogHash(store.activeBacklog, lastView || defaultViewId()));
     },
     rerender() {
       render();
@@ -278,7 +298,7 @@ function topBar(ctx, view) {
   const task = isTask ? store.get(route.key) : null;
 
   const bar = el("div.bar", null,
-    el("div.brand", { title: "back to the last view you were on", onclick: () => navigate(`#/${lastView || defaultViewId()}`) },
+    el("div.brand", { title: "workspace overview", onclick: () => navigate("#/overview") },
       svg([
         "M12 5a7 7 0 100 14 7 7 0 000-14z",
         "M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3",
@@ -287,9 +307,22 @@ function topBar(ctx, view) {
     ),
   );
 
+  bar.append(el("div.backlog-tabs", null,
+    el("button.backlog-tab" + (route.kind === "overview" ? ".on" : ""), { onclick: () => navigate("#/overview") }, "OVERVIEW"),
+    store.listBacklogs().map((backlog) =>
+      el("button.backlog-tab" + (backlog.id === store.activeBacklog && route.kind !== "overview" ? ".on" : ""), {
+        title: backlog.dir,
+        onclick: () => {
+          selectBacklog(backlog.id);
+          navigate(backlogHash(backlog.id, lastView || defaultViewId()));
+        },
+      }, backlog.label),
+    ),
+  ));
+
   if (isTask && task) {
     bar.append(detailCrumb(task, ctx));
-  } else {
+  } else if (route.kind !== "overview") {
     bar.append(
       el("div.rootpath", { title: meta?.root || "" },
         el("span", null, meta?.root || "…"),
@@ -300,7 +333,7 @@ function topBar(ctx, view) {
       el("div.seg", null,
         allViews().map((v) =>
           el("button.seg-item" + (v.id === view?.id ? ".on" : ""), {
-            onclick: () => navigate(`#/${v.id}`),
+            onclick: () => navigate(backlogHash(store.activeBacklog, v.id)),
           }, v.label),
         ),
       ),
@@ -309,7 +342,7 @@ function topBar(ctx, view) {
 
   bar.append(el("div.grow"));
 
-  if (!isTask) {
+  if (!isTask && route.kind !== "overview") {
     bar.append(
       el("div.since", { title: "file modification time — Agent Notes carry a date with no clock time, so anything under a day can only come from when the file was last written" },
         el("span.rail-label", null, "TOUCHED"),
@@ -324,7 +357,7 @@ function topBar(ctx, view) {
     );
   }
 
-  if (!isTask && view?.filters?.includes("search")) {
+  if (!isTask && route.kind !== "overview" && view?.filters?.includes("search")) {
     const input = el("input", {
       type: "search",
       placeholder: `Search ${num(ctx.allTasks.length)} tasks`,
@@ -338,7 +371,7 @@ function topBar(ctx, view) {
     bar.append(el("div.search", null, svg(ICON.search, { size: 13, stroke: "var(--faint)" }), input));
   }
 
-  if (meta) {
+  if (meta && route.kind !== "overview") {
     const activeWork = activeWorkCount(ctx.allTasks);
     bar.append(
       el("div.active-work", {
@@ -463,6 +496,17 @@ function detailStrip(ctx, view) {
 /* ── render ──────────────────────────────────────────────── */
 
 function render(options = {}) {
+  if (route.kind === "overview") {
+    clear(root);
+    root.append(topBar({ allTasks: [], meta: null }, null));
+    root.append(renderOverview(store.listBacklogs(), (backlog) => {
+      selectBacklog(backlog);
+      navigate(backlogHash(backlog));
+    }));
+    return;
+  }
+
+  if (route.backlog) selectBacklog(route.backlog);
   const ctx = buildContext();
 
   if (route.kind === "task") {
@@ -547,7 +591,7 @@ store.load()
     restoreState(store.list());
     // An explicit hash is someone's link and always wins over stored state.
     if (!location.hash.replace(/^#\/?/, "") && lastView) {
-      route = { kind: "view", id: lastView, param: null };
+    route = { kind: "view", backlog: store.activeBacklog, id: lastView, param: null };
     }
     store.connect();
     render();

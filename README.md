@@ -13,6 +13,35 @@ cd ~/work/your-repo
 tasklens
 ```
 
+## Watch several backlogs together
+
+Save each backlog once under a short, local name, then start a workspace:
+
+```sh
+tasklens backlog add cs ~/work/cs
+tasklens backlog add tasklens ~/work/tasklens
+tasklens serve
+```
+
+`tasklens backlog list` shows the saved names and `tasklens backlog remove <name>` removes one.
+The configuration is stored in your user config directory (`~/.config/tasklens/backlogs.json` on
+macOS/Linux), never in a project's `TASKS/` folder. A saved entry resolves its directory to the
+actual `TASKS/` folder when it is added, so a repository root or its task folder both work.
+
+For a one-off workspace that leaves no configuration behind, repeat `--backlog`:
+
+```sh
+tasklens serve --backlog cs=~/work/cs --backlog tasklens=~/work/tasklens
+```
+
+The first tab is **Overview**, with a card for every backlog and its status distribution, blocked
+count and in-progress work touched in the last hour. Each named tab then opens the usual Kanban,
+Timeline, Groups and Files views for that backlog only. Task numbers and task relationships never
+cross a backlog boundary, even when folders both contain a task named `0001`.
+
+Plain `tasklens` remains the quick one-backlog command: it discovers the nearest `TASKS/` directory
+and serves it as before.
+
 ## Add it to your agent environment
 
 TaskLens shows a backlog; the agents working in the repository still need a

@@ -237,7 +237,7 @@ function relationPanel(task, ctx) {
   );
 }
 
-function referencePanel(task) {
+function referencePanel(task, ctx) {
   if (!task.references.length) return null;
 
   return el("div.panel", { style: { display: "flex", flexDirection: "column", gap: "10px" } },
@@ -247,7 +247,7 @@ function referencePanel(task) {
       return el("div.reffile", {
         onclick: () => {
           if (isUrl) window.open(reference.target, "_blank", "noopener");
-          else window.open(`/api/reference?path=${encodeURIComponent(reference.target)}`, "_blank", "noopener");
+          else window.open(`/api/reference?backlog=${encodeURIComponent(ctx.backlog.id)}&path=${encodeURIComponent(reference.target)}`, "_blank", "noopener");
         },
       },
         svg(isUrl ? ICON.link : ICON.file, { size: 13, stroke: "var(--muted)" }),
@@ -386,7 +386,7 @@ export function renderDetail(task, ctx) {
       el("div.detail-rail", null,
         relationPanel(task, ctx),
         filePanel(task, ctx),
-        referencePanel(task),
+        referencePanel(task, ctx),
         activityPanel(task),
       ),
     ),
