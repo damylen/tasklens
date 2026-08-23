@@ -254,4 +254,9 @@ ${snapshots.map((backlog) => {
   };
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
+
+  // Bun's server handle does not keep every non-interactive invocation alive
+  // on its own. Keep the CLI process explicit: signals above remain the clean
+  // shutdown path for both a terminal run and a background local service.
+  await new Promise<void>(() => {});
 }
