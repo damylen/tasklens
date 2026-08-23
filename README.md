@@ -13,6 +13,31 @@ cd ~/work/your-repo
 tasklens
 ```
 
+## Add it to your agent environment
+
+TaskLens shows a backlog; the agents working in the repository still need a
+shared rule for keeping it accurate. Add TaskLens locally, then copy the
+included starter kit into the root of a project that uses `TASKS/`:
+
+```sh
+bun add -d tasklens
+cp -R node_modules/tasklens/templates/task-system/. .
+```
+
+When working from a clone instead of an installed package, replace
+`node_modules/tasklens` with the TaskLens checkout. The kit provides:
+
+- `AGENTS.md` — the canonical workflow, automatically discovered by Codex and
+  usable by any coding agent.
+- `CLAUDE.md` — tells Claude Code to use that shared workflow.
+- `.github/copilot-instructions.md` — makes the same workflow available to
+  GitHub Copilot.
+- `TASKS/README.md` — documents the task-file contract without becoming a task
+  card itself.
+
+Keep project-specific coding, testing, and release instructions in the
+project's own agent files; the starter kit only governs shared task tracking.
+
 ## What it reads
 
 Only `NNNN-*.md` at the root of the tasks directory. Subdirectories are neither
