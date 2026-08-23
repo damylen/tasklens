@@ -4,6 +4,7 @@ import { virtualList } from "../lib/virtual.js";
 import { areaLabel } from "../lib/area.js";
 
 const COLUMNS = [
+  { key: "wishlist", label: "WISHLIST" },
   { key: "open", label: "OPEN" },
   { key: "in_progress", label: "IN PROGRESS" },
   { key: "blocked", label: "BLOCKED" },

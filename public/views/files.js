@@ -1,5 +1,6 @@
 import { el, svg, ICON } from "../lib/dom.js";
 import { ago, num, statusLabel } from "../lib/format.js";
+import { isOperationalStatus } from "../lib/status.js";
 
 const SORTS = [
   ["tasks", "Most tasks"],
@@ -34,9 +35,9 @@ function fileRow(path, tasks, ctx, { warn = false, scope = "all" } = {}) {
   // key keeps opening one from silently opening the other.
   const key = `${scope}:${path}`;
   const open = expanded.has(key);
-  const unfinished = tasks.filter((t) => t.status !== "done");
+  const operational = tasks.filter((task) => isOperationalStatus(task.status));
   const newest = tasks.reduce((a, t) => (t.lastActivity || "") > a ? (t.lastActivity || "") : a, "");
-  const counts = { open: 0, in_progress: 0, blocked: 0, done: 0 };
+  const counts = { wishlist: 0, open: 0, in_progress: 0, blocked: 0, done: 0 };
   for (const task of tasks) counts[task.status]++;
 
   const rows = [
@@ -58,14 +59,14 @@ function fileRow(path, tasks, ctx, { warn = false, scope = "all" } = {}) {
       svg(ICON.file, { size: 12, stroke: warn ? "var(--st-blocked)" : "var(--faint)" }),
       el("span.filepath", { title: path }, path),
       el("div.mini-roll", { style: { width: "72px" },
-        title: ["done", "in_progress", "blocked", "open"].map((k) => `${counts[k]} ${k.replace("_", " ")}`).join(" · ") },
-        ["done", "in_progress", "blocked", "open"].filter((k) => counts[k] > 0).map((k) =>
+        title: ["wishlist", "done", "in_progress", "blocked", "open"].map((k) => `${counts[k]} ${k.replace("_", " ")}`).join(" · ") },
+        ["wishlist", "done", "in_progress", "blocked", "open"].filter((k) => counts[k] > 0).map((k) =>
           el("span", { style: { flex: `${counts[k]} 1 0`, background: `var(--st-${k})` } })),
       ),
       el("span.blockcount", {
         style: warn ? { color: "var(--st-blocked)", borderColor: "var(--st-blocked)" } : null,
-        title: `${unfinished.length} unfinished of ${tasks.length} tasks naming this file`,
-      }, `${unfinished.length}/${tasks.length}`),
+        title: `${operational.length} active of ${tasks.length} tasks naming this file`,
+      }, `${operational.length}/${tasks.length}`),
       el("span.ago", null, ago(newest)),
     ),
   ];
@@ -103,10 +104,10 @@ function build(ctx) {
   }
 
   // ── contention warning ──
-  // Two or more UNFINISHED tasks pointing at one file is the collision worth
-  // surfacing: finished tasks naming a file are history, not a conflict.
+  // Two or more operational tasks pointing at one file are the collision worth
+  // surfacing: done and wishlist tasks are planning/history, not a conflict.
   const contended = [...index.entries()]
-    .map(([path, tasks]) => ({ path, tasks, open: tasks.filter((t) => t.status !== "done") }))
+    .map(([path, tasks]) => ({ path, tasks, open: tasks.filter((task) => isOperationalStatus(task.status)) }))
     .filter((row) => row.open.length >= 2)
     .sort((a, b) => b.open.length - a.open.length || a.path.localeCompare(b.path));
 
@@ -116,7 +117,7 @@ function build(ctx) {
         el("div.day-label", { style: { color: "var(--st-blocked)" } }, "CONTENDED"),
         el("div.day-rule"),
         el("span.day-meta", null,
-          `${num(contended.length)} file${contended.length === 1 ? "" : "s"} that two or more unfinished tasks point at`),
+          `${num(contended.length)} file${contended.length === 1 ? "" : "s"} that two or more active tasks point at`),
         el("button.colbtn", {
           title: warningsOpen ? "collapse" : "expand",
           onclick: () => { warningsOpen = !warningsOpen; ctx.rerender(); },

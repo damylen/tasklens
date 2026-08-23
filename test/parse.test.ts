@@ -15,7 +15,7 @@ ${extra}
 `;
 
 describe("status normalization", () => {
-  // The board has four columns, but files carry a wider vocabulary. Folding has
+  // The board has explicit columns, but files carry a wider vocabulary. Folding has
   // to be lossless: a reader must still be able to see what the file said.
   test("folds a variant spelling but keeps the raw string visible", () => {
     const { task } = build(header().replace("Status: open", "Status: in-progress"));
@@ -27,6 +27,13 @@ describe("status normalization", () => {
     const { task } = build(header().replace("Status: open", "Status: investigation complete"));
     expect(task.status).toBe("done");
     expect(task.statusRaw).toBe("investigation complete");
+  });
+
+  test("keeps an uncommitted idea outside the operational backlog", () => {
+    const { task, warnings } = build(header().replace("Status: open", "Status: wishlist"));
+    expect(task.status).toBe("wishlist");
+    expect(task.statusRaw).toBe("wishlist");
+    expect(warnings.some((w) => w.field === "Status")).toBe(false);
   });
 
   // Silently filing an unreadable status under `open` would make the board lie

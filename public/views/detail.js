@@ -1,9 +1,11 @@
 import { el, svg, ICON } from "../lib/dom.js";
 import { ago, bytes, num, stamp, statusLabel } from "../lib/format.js";
 import { renderMarkdown } from "../lib/md.js";
+import { isOperationalStatus } from "../lib/status.js";
 
 const SUB_FILTERS = [
   ["all", "All"],
+  ["wishlist", "Wishlist"],
   ["open", "Open"],
   ["in_progress", "Active"],
   ["blocked", "Blocked"],
@@ -11,7 +13,7 @@ const SUB_FILTERS = [
 ];
 
 const HIDDEN_SECTIONS = new Set(["agent notes", "notes", "subtasks", "sub tasks"]);
-const ROLLUP_ORDER = ["done", "in_progress", "blocked", "open"];
+const ROLLUP_ORDER = ["done", "in_progress", "blocked", "open", "wishlist"];
 
 let subFilter = "all";
 let expanded = new Set();
@@ -268,10 +270,10 @@ function referencePanel(task, ctx) {
 function filePanel(task, ctx) {
   if (!task.files.length) return null;
 
-  // Which of these files other unfinished tasks are also pointing at.
+  // Which of these files other operational tasks are also pointing at.
   const contended = new Map();
   for (const other of ctx.allTasks) {
-    if (other.id === task.id || other.status === "done") continue;
+    if (other.id === task.id || !isOperationalStatus(other.status)) continue;
     for (const file of other.files) {
       if (task.files.includes(file)) contended.set(file, (contended.get(file) || 0) + 1);
     }
@@ -286,7 +288,7 @@ function filePanel(task, ctx) {
       task.files.map((file) => {
         const others = contended.get(file) || 0;
         return el("div.reffile", {
-          title: others ? `${others} other unfinished task${others === 1 ? "" : "s"} also name this file` : file,
+          title: others ? `${others} other active task${others === 1 ? "" : "s"} also name this file` : file,
           onclick: () => ctx.goFile(file),
         },
           svg(ICON.file, { size: 12, stroke: others ? "var(--st-blocked)" : "var(--muted)" }),
@@ -301,7 +303,7 @@ function filePanel(task, ctx) {
     ),
     contended.size
       ? el("span", { style: { fontSize: "11px", lineHeight: "1.5", color: "var(--faint)" } },
-          "Marked files are also named by unfinished tasks elsewhere.")
+          "Marked files are also named by active tasks elsewhere.")
       : null,
   );
 }

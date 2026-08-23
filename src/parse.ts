@@ -8,6 +8,12 @@ import type {
  * is always kept on the task so nothing is silently rewritten.
  */
 const STATUS_WORDS: Record<string, Status> = {
+  wishlist: "wishlist",
+  idea: "wishlist",
+  someday: "wishlist",
+  someday_maybe: "wishlist",
+  "someday-maybe": "wishlist",
+
   done: "done",
   completed: "done",
   complete: "done",

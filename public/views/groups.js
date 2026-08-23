@@ -1,6 +1,7 @@
 import { el, svg, ICON } from "../lib/dom.js";
 import { ago, num, statusLabel } from "../lib/format.js";
 import { areaLabel } from "../lib/area.js";
+import { isOperationalStatus } from "../lib/status.js";
 
 const MODES = [
   ["parent", "By parent"],
@@ -22,7 +23,7 @@ function statusChip(task, extra = {}) {
 
 function rollupBar(rollup, width = 90) {
   if (!rollup || !rollup.total) return null;
-  const order = ["done", "in_progress", "blocked", "open"];
+  const order = ["done", "in_progress", "blocked", "open", "wishlist"];
   return el("div.mini-roll", { style: { width: `${width}px` }, title:
     order.map((k) => `${rollup[k]} ${k.replace("_", " ")}`).join(" · ") },
     order.filter((k) => rollup[k] > 0).map((k) =>
@@ -128,16 +129,20 @@ function byBlocking(ctx) {
     .filter((t) => t.blocks.length)
     .map((t) => {
       const waiters = t.blocks.map((id) => ctx.byId.get(id)).filter(Boolean).filter((w) => visible.has(w.id));
-      const openWaiters = waiters.filter((w) => w.status !== "done");
+      // A wishlist relation remains visible for planning, but it must never
+      // advertise an operational blocker — regardless of which end is a wish.
+      const openWaiters = isOperationalStatus(t.status)
+        ? waiters.filter((waiter) => isOperationalStatus(waiter.status))
+        : [];
       return { task: t, waiters, openWaiters };
     })
     // Both ends must survive the filter: a blocker the filter excluded is not
     // shown, and neither is one whose every dependant was excluded.
     .filter((row) => visible.has(row.task.id) && row.waiters.length)
-    // Real bottlenecks first: an unfinished task with people waiting on it.
+    // Real bottlenecks first: an operational task with people waiting on it.
     .sort((a, b) => {
-      const aLive = a.task.status !== "done" && a.openWaiters.length > 0;
-      const bLive = b.task.status !== "done" && b.openWaiters.length > 0;
+      const aLive = isOperationalStatus(a.task.status) && a.openWaiters.length > 0;
+      const bLive = isOperationalStatus(b.task.status) && b.openWaiters.length > 0;
       if (aLive !== bLive) return aLive ? -1 : 1;
       return b.openWaiters.length - a.openWaiters.length || a.task.num - b.task.num;
     });
@@ -148,7 +153,7 @@ function byBlocking(ctx) {
 
   for (const row of shown) {
     const task = row.task;
-    const live = task.status !== "done" && row.openWaiters.length > 0;
+    const live = isOperationalStatus(task.status) && row.openWaiters.length > 0;
     const open = expanded.has(task.id);
 
     body.append(
@@ -172,7 +177,7 @@ function byBlocking(ctx) {
         areaLabel(task, ctx, { className: "row-area" }),
         el("span.blockcount", {
           style: live ? { color: "var(--st-blocked)", borderColor: "var(--st-blocked)" } : null,
-          title: `${row.openWaiters.length} unfinished of ${row.waiters.length} waiting`,
+          title: `${row.openWaiters.length} active of ${row.waiters.length} waiting`,
         }, `${row.openWaiters.length}/${row.waiters.length} waiting`),
         statusChip(task),
         el("span.ago", null, ago(task.lastActivity)),
@@ -199,9 +204,9 @@ function byBlocking(ctx) {
     }
   }
 
-  const live = blockers.filter((r) => r.task.status !== "done" && r.openWaiters.length).length;
+  const live = blockers.filter((r) => isOperationalStatus(r.task.status) && r.openWaiters.length).length;
   return { body, shown: shown.length, total: blockers.length,
-    note: `${num(live)} unfinished tasks have something waiting on them` };
+    note: `${num(live)} active tasks have something waiting on them` };
 }
 
 /* ── view ──────────────────────────────────────────────── */

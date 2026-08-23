@@ -34,5 +34,7 @@ References: none
 - YYYY-MM-DD: what changed, what was verified, and what remains
 ```
 
-Use `open`, `in_progress`, `blocked`, and `done` as statuses. Preserve task
-history by appending Agent Notes instead of overwriting them.
+Use `wishlist` for an idea that is not ready to plan, then promote it to `open`
+when it becomes intended work. `in_progress`, `blocked`, and `done` describe
+the operational lifecycle. Preserve task history by appending Agent Notes instead
+of overwriting them.

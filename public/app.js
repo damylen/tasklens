@@ -10,7 +10,7 @@ import "./views/index.js";
 const store = new ClientStore();
 const root = document.getElementById("app");
 
-const filters = { q: "", priority: "all", area: "", since: 0, hideDone: false };
+const filters = { q: "", priority: "all", area: "", since: 0, hideDone: false, hideWishlist: false };
 
 /** One namespaced store shared by the chrome and every view. */
 let persist = null;
@@ -31,6 +31,7 @@ function ensurePersist() {
 function saveFilters() {
   persist?.store.write("chrome.filters", {
     hideDone: filters.hideDone,
+    hideWishlist: filters.hideWishlist,
     area: filters.area,
     since: filters.since,
   });
@@ -50,12 +51,14 @@ function saveView(id) {
 function restoreState(tasks) {
   const store_ = ensurePersist();
   filters.hideDone = false;
+  filters.hideWishlist = false;
   filters.area = "";
   filters.since = 0;
 
   const saved = store_.read("chrome.filters", null);
   if (saved && typeof saved === "object") {
     filters.hideDone = saved.hideDone === true;
+    filters.hideWishlist = saved.hideWishlist === true;
     if (SINCE_WINDOWS.some(([window]) => window === saved.since)) filters.since = saved.since;
     if (typeof saved.area === "string" && saved.area) {
       const known = new Set();
@@ -147,6 +150,7 @@ function buildContext() {
     if (!areaMatches(task, filters.area)) return false;
     if (!sinceMatches(task, filters.since)) return false;
     if (filters.hideDone && task.status === "done") return false;
+    if (filters.hideWishlist && task.status === "wishlist") return false;
     if (query) {
       const hay = `${task.number} ${task.title} ${task.area} ${task.agent} ${task.id}`.toLowerCase();
       if (!hay.includes(query)) return false;
@@ -457,6 +461,10 @@ function filterRail(ctx, view) {
         title: filters.hideDone ? "show done tasks again" : "take done tasks out of every view",
         onclick: () => ctx.setFilter("hideDone", !filters.hideDone),
       }, filters.hideDone ? "DONE HIDDEN" : "HIDE DONE"),
+      el("button.chip.tiny" + (filters.hideWishlist ? ".on" : ""), {
+        title: filters.hideWishlist ? "show wishlist tasks again" : "take wishlist tasks out of every view",
+        onclick: () => ctx.setFilter("hideWishlist", !filters.hideWishlist),
+      }, filters.hideWishlist ? "WISHLIST HIDDEN" : "HIDE WISHLIST"),
     );
   }
 

@@ -5,7 +5,7 @@ import { parseTask } from "./parse.ts";
 import type { Meta, Rollup, Status, Task, Warning } from "./types.ts";
 
 const TASK_FILE = /^\d{4,}[-_].*\.md$/;
-const STATUSES: Status[] = ["open", "in_progress", "blocked", "done"];
+const STATUSES: Status[] = ["wishlist", "open", "in_progress", "blocked", "done"];
 
 export type Change =
   | { type: "upsert"; tasks: Task[] }
@@ -285,7 +285,7 @@ export class TaskStore {
       }
       if (!ids.size) continue;
 
-      const rollup: Rollup = { open: 0, in_progress: 0, blocked: 0, done: 0, total: 0 };
+      const rollup: Rollup = { wishlist: 0, open: 0, in_progress: 0, blocked: 0, done: 0, total: 0 };
       for (const id of ids) {
         const child = this.tasks.get(id);
         if (!child) continue;
@@ -309,7 +309,7 @@ export class TaskStore {
   }
 
   meta(): Meta {
-    const counts = { open: 0, in_progress: 0, blocked: 0, done: 0 } as Record<Status, number>;
+    const counts = { wishlist: 0, open: 0, in_progress: 0, blocked: 0, done: 0 } as Record<Status, number>;
     let noteCount = 0;
     for (const task of this.tasks.values()) {
       counts[task.status]++;

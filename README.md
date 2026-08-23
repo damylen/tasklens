@@ -189,7 +189,7 @@ handles and loud about the ones it cannot.
 
 | Reality | Handling |
 |---|---|
-| `Status: in-progress`, `on_hold`, `investigation complete` | folded onto the four columns by keyword; the raw string stays on the task and is shown on the detail page |
+| `Status: wishlist`, `in-progress`, `on_hold`, `investigation complete` | folded onto the matching planning or operational column by keyword; the raw string stays on the task and is shown on the detail page |
 | `Status:` missing or unreadable | filed under Open **and** reported in the startup warnings |
 | `Agent: Alice` vs `alice` | case-folded into one bucket for display |
 | `Area: web/app editor` | treated as a path — `/` and whitespace both separate, so this is `web` > `app` > `editor` |
@@ -215,7 +215,7 @@ as the activity date itself.
 
 ## Views
 
-**Kanban** — four columns, every one of them windowed, so a Done column holding
+**Kanban** — five columns, every one of them windowed, so a Done column holding
 several thousand cards costs the same as an empty one. Each column collapses to
 a narrow rail from its own header and can be hidden entirely from the `COLUMNS`
 control; both are remembered per backlog in local storage, so a board comes back
@@ -229,18 +229,18 @@ task's newest note — the UI does not pretend the file stores transitions.
 
 **Groups** — the backlog as a graph rather than a list. `By parent` shows
 umbrella tasks as a tree with a rollup bar per branch; `By dependency` ranks the
-tasks something else is waiting on, real bottlenecks first — an unfinished task
+tasks something else is waiting on, real bottlenecks first — an operational task
 with open dependants outranks a finished one.
 
 **Files** — which tasks touched which source file. At the top sits a
-`CONTENDED` section: files that two or more **unfinished** tasks are all
-pointing at. A finished task naming a file is history; several unfinished ones
+`CONTENDED` section: files that two or more **operational** tasks are all
+pointing at. A finished or wishlist task naming a file is history or planning; several active ones
 naming the same file is a collision worth knowing about before you start.
 
 **Task detail** — the rendered sections, the subtask list with each child's real
 status, the full note history, and a rail carrying relations, the files the task
 names, references and file stats. A file marked in that panel is one other
-unfinished tasks also name; clicking it opens the Files view on that file.
+operational tasks also name; clicking it opens the Files view on that file.
 
 ### How files are found
 
@@ -263,7 +263,7 @@ home directory in the UI.
 
 The top bar carries identity, navigation, the `TOUCHED` recency control, search
 and totals. The filter rail below it carries the shared filters — priority,
-`HIDE DONE`, the area drill-down — plus whatever controls the active view owns.
+`HIDE DONE`, `HIDE WISHLIST`, the area drill-down — plus whatever controls the active view owns.
 A third row appears only for views that offer one, holding the wider things that
 would otherwise crowd the rail; the timeline puts its notes-per-day chart there.
 That row collapses from the chevron at the end of the rail and remembers whether
@@ -277,6 +277,13 @@ done still shows through: a done umbrella that still has unfinished children
 stays visible in `Groups`, because there is no way to show an open child without
 its parent. Such a row is always an ancestor of work that passed the filter,
 never a leaf.
+
+### Wishlist ideas
+
+`Status: wishlist` records an idea that is intentionally not planned work yet. It has its own
+Kanban column and can be hidden independently. Wishlist items stay in search, task detail, groups,
+and file history, but are excluded from active-work, blocker, and file-contention signals. Change
+the field to `Status: open` when an idea becomes planned work.
 
 ### Filtering by recency
 

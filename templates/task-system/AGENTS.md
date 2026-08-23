@@ -18,7 +18,8 @@ of truth for active work across humans and coding agents.
   or an agent-specific planning format.
 - Record material decisions, verified checks, blockers, and concrete handoff
   information in dated Agent Notes. Append; do not rewrite earlier notes.
-- Keep the task's status honest: `open`, `in_progress`, `blocked`, or `done`.
+- Keep the task's status honest: `wishlist` for uncommitted ideas; `open`,
+  `in_progress`, `blocked`, or `done` for planned and active work.
 - Create a separate task only when the work has independent ownership,
   sequencing, or verification. Link parent and dependency fields when needed.
 

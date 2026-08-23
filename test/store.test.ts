@@ -100,7 +100,7 @@ describe("derived relations", () => {
       "0003-unlisted.md": task("0003", "Parent: 0001", "in_progress"),
     });
     const parent = store.get("0001-parent")!;
-    expect(parent.rollup).toEqual({ open: 0, in_progress: 1, blocked: 0, done: 1, total: 2 });
+    expect(parent.rollup).toEqual({ wishlist: 0, open: 0, in_progress: 1, blocked: 0, done: 1, total: 2 });
   });
 
   // The checkbox in a parent is a hand-maintained copy. The child file is the
@@ -276,11 +276,24 @@ describe("counts", () => {
       "0002-b.md": task("0002", "", "done"),
       "0003-c.md": task("0003", "", "done"),
       "0004-d.md": task("0004", "", "blocked"),
+      "0005-e.md": task("0005", "", "wishlist"),
     });
     const meta = store.meta();
-    expect(meta.counts).toEqual({ open: 1, in_progress: 0, blocked: 1, done: 2 });
-    expect(meta.total).toBe(4);
+    expect(meta.counts).toEqual({ wishlist: 1, open: 1, in_progress: 0, blocked: 1, done: 2 });
+    expect(meta.total).toBe(5);
     expect(Object.values(meta.counts).reduce((a, b) => a + b, 0)).toBe(meta.total);
+  });
+
+  // An idea must not silently become planned work: only an explicit Status
+  // edit promotes it from Wishlist into the Open aggregate.
+  test("promotes a wishlist task only after its status becomes open", async () => {
+    const store = await fixture({ "0001-idea.md": task("0001", "", "wishlist") });
+    expect(store.meta().counts).toMatchObject({ wishlist: 1, open: 0 });
+
+    await writeFile(join(store.root, "0001-idea.md"), task("0001", "", "open"));
+    await store.scan();
+
+    expect(store.meta().counts).toMatchObject({ wishlist: 0, open: 1 });
   });
 });
 

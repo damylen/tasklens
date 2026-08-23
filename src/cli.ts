@@ -239,8 +239,8 @@ export async function main(argv = Bun.argv.slice(2)): Promise<void> {
 
   serving  ${snapshots.length} backlog${snapshots.length === 1 ? "" : "s"}
 ${snapshots.map((backlog) => {
-    const { open, in_progress, blocked, done } = backlog.meta.counts;
-    return `  ${backlog.label}\t${backlog.meta.total} tasks · ${open} open · ${in_progress} in progress · ${blocked} blocked · ${done} done`;
+    const { wishlist, open, in_progress, blocked, done } = backlog.meta.counts;
+    return `  ${backlog.label}\t${backlog.meta.total} tasks · ${wishlist} wishlist · ${open} open · ${in_progress} in progress · ${blocked} blocked · ${done} done`;
   }).join("\n")}
   parsed   ${Date.now() - began}ms
   url      ${url}

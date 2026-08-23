@@ -1,4 +1,4 @@
-export type Status = "open" | "in_progress" | "blocked" | "done";
+export type Status = "wishlist" | "open" | "in_progress" | "blocked" | "done";
 export type Priority = "critical" | "high" | "medium" | "low";
 
 export interface Note {
@@ -24,6 +24,7 @@ export interface Reference {
 }
 
 export interface Rollup {
+  wishlist: number;
   open: number;
   in_progress: number;
   blocked: number;

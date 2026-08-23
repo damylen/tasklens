@@ -45,13 +45,14 @@ function activityPlane(backlog, open) {
       el("div.project-plane-total", null, num(backlog.meta.total), el("span", null, " tasks")),
     ),
     el("div.status-strip.project-plane-status", null,
-      ["open", "in_progress", "blocked", "done"].map((status) =>
+      ["wishlist", "open", "in_progress", "blocked", "done"].map((status) =>
         counts[status] ? el("span", { style: { flex: `${counts[status]} 1 0`, background: `var(--st-${status})` } }) : null,
       ),
     ),
     el("div.project-plane-summary", null,
       el("span", { style: { color: "var(--st-in_progress)" } }, `${active(backlog)} active · 1h`),
       el("span", null, `${counts.blocked} blocked`),
+      counts.wishlist ? el("span", { style: { color: "var(--st-wishlist)" } }, `${counts.wishlist} wishlist`) : null,
     ),
     el("div.project-activity-list", null,
       entries.length
