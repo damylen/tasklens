@@ -62,4 +62,6 @@ export const ICON = {
   collapse: ["M13 6l-5 6 5 6", "M18 6l-5 6 5 6"],
   expand: ["M11 6l5 6-5 6", "M6 6l5 6-5 6"],
   clock: ["M12 21a9 9 0 100-18 9 9 0 000 18z", "M12 7v5l3 2"],
+  chevronUp: "M6 15l6-6 6 6",
+  chevronDown: "M6 9l6 6 6-6",
 };

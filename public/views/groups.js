@@ -32,12 +32,27 @@ function rollupBar(rollup, width = 90) {
 
 /* ── by parent ─────────────────────────────────────────── */
 
+/**
+ * A branch is worth drawing when the task itself passes the filter or when
+ * something below it does — so the tree keeps its shape without showing rows
+ * the filter excluded (a done child stays hidden under `HIDE DONE`).
+ */
+function keeps(task, ctx, visible, seen = new Set()) {
+  if (visible.has(task.id)) return true;
+  if (seen.has(task.id)) return false;
+  seen.add(task.id);
+  return task.children.some((id) => {
+    const child = ctx.byId.get(id);
+    return child ? keeps(child, ctx, visible, seen) : false;
+  });
+}
+
 function branch(task, ctx, depth, visible) {
   const open = expanded.has(task.id);
   const kids = task.children
     .map((id) => ctx.byId.get(id))
     .filter(Boolean)
-    .filter((child) => visible.has(child.id) || child.children.length)
+    .filter((child) => keeps(child, ctx, visible))
     .sort((a, b) => a.num - b.num);
 
   const rows = [
@@ -86,7 +101,7 @@ function byParent(ctx) {
       if (!t.parent) return true;
       return !ctx.resolve(t.parent).some((p) => p.children.length);
     })
-    .filter((t) => visible.has(t.id) || t.children.some((id) => visible.has(id)))
+    .filter((t) => keeps(t, ctx, visible))
     .sort((a, b) => {
       const left = a.lastActivity || "";
       const right = b.lastActivity || "";
@@ -112,11 +127,13 @@ function byBlocking(ctx) {
   const blockers = ctx.allTasks
     .filter((t) => t.blocks.length)
     .map((t) => {
-      const waiters = t.blocks.map((id) => ctx.byId.get(id)).filter(Boolean);
+      const waiters = t.blocks.map((id) => ctx.byId.get(id)).filter(Boolean).filter((w) => visible.has(w.id));
       const openWaiters = waiters.filter((w) => w.status !== "done");
       return { task: t, waiters, openWaiters };
     })
-    .filter((row) => visible.has(row.task.id) || row.waiters.some((w) => visible.has(w.id)))
+    // Both ends must survive the filter: a blocker the filter excluded is not
+    // shown, and neither is one whose every dependant was excluded.
+    .filter((row) => visible.has(row.task.id) && row.waiters.length)
     // Real bottlenecks first: an unfinished task with people waiting on it.
     .sort((a, b) => {
       const aLive = a.task.status !== "done" && a.openWaiters.length > 0;
@@ -229,7 +246,7 @@ function build(ctx) {
 export default {
   id: "groups",
   label: "Groups",
-  filters: ["search", "priority", "area", "since"],
+  filters: ["search", "priority", "status", "area"],
 
   toolbar(ctx) {
     return el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
@@ -242,7 +259,7 @@ export default {
         ),
       ),
       el("div.rail-div"),
-      el("button.chip", {
+      el("button.chip.tiny", {
         // Bounded by the rows the last build drew, so it never walks the
         // whole backlog looking for something to open.
         onclick: () => {

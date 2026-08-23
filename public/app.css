@@ -383,3 +383,17 @@ a:hover { color: #f2b862; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .entry-area { display: inline-flex; align-items: baseline; }
+
+/* ── compact recency on the top bar ─────────────────────── */
+.since { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.chip.tiny { padding: 3px 6px; font-size: 9.5px; letter-spacing: 0.3px; }
+
+/* ── collapsible detail strip ───────────────────────────── */
+.detailbar {
+  flex: 0 0 auto; min-height: 40px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  display: flex; align-items: center; gap: 16px;
+  padding: 6px 20px;
+}
+.detail-toggle { margin-left: 6px; }

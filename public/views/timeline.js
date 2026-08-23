@@ -146,12 +146,14 @@ function build(ctx) {
 export default {
   id: "timeline",
   label: "Timeline",
-  filters: ["search", "area", "since"],
+  filters: ["search", "status", "area"],
+
+  detailBar(ctx) {
+    return sparkline(ctx.allNotes);
+  },
 
   toolbar(ctx) {
     return el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
-      sparkline(ctx.allNotes),
-      el("div.rail-div"),
       el("span.rail-label", null, "SHOW"),
       el("div.seg.tight", null,
         SHOW_MODES.map(([mode, label]) =>

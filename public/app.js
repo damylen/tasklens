@@ -1,6 +1,7 @@
 import { el, clear, svg, ICON } from "./lib/dom.js";
 import { num } from "./lib/format.js";
 import { ClientStore } from "./lib/store.js";
+import { createStore } from "./lib/persist.js";
 import { allViews, defaultViewId, getView } from "./lib/registry.js";
 import { renderDetail, detailCrumb, resetDetailState } from "./views/detail.js";
 import "./views/index.js";
@@ -8,7 +9,18 @@ import "./views/index.js";
 const store = new ClientStore();
 const root = document.getElementById("app");
 
-const filters = { q: "", priority: "all", area: "", since: 0 };
+const filters = { q: "", priority: "all", area: "", since: 0, hideDone: false };
+
+/** One namespaced store shared by the chrome and every view. */
+let persist = null;
+function ensurePersist() {
+  const root = store.meta?.root || "";
+  if (persist && persist.root === root) return persist.store;
+  persist = { root, store: createStore(root) };
+  detailOpen = persist.store.read("chrome.detailBar", true) !== false;
+  return persist.store;
+}
+let detailOpen = true;
 let route = { kind: "view", id: defaultViewId() };
 let active = null;      // { view, node }
 let searchInput = null;
@@ -54,6 +66,7 @@ function buildContext() {
     if (filters.priority !== "all" && task.priority !== filters.priority) return false;
     if (!areaMatches(task, filters.area)) return false;
     if (!sinceMatches(task, filters.since)) return false;
+    if (filters.hideDone && task.status === "done") return false;
     if (query) {
       const hay = `${task.number} ${task.title} ${task.area} ${task.agent} ${task.id}`.toLowerCase();
       if (!hay.includes(query)) return false;
@@ -75,6 +88,7 @@ function buildContext() {
     filters,
     meta: store.meta,
     store,
+    persist: ensurePersist(),
     setFilter(key, value) {
       filters[key] = value;
       render();
@@ -123,7 +137,7 @@ function sinceMatches(task, window) {
   return task.mtime >= Date.now() - window;
 }
 
-const AREA_CHIP_LIMIT = 8;
+const AREA_CHIP_LIMIT = 6;
 
 /**
  * Areas form a shallow tree (`client` > `v2` > `dataview`), so the rail drills
@@ -170,7 +184,7 @@ function chips(label, options, current, onPick) {
     el("span.rail-label", null, label),
     el("div.chips", null,
       options.map(([value, text]) =>
-        el("button.chip" + (current === value ? ".on" : ""), {
+        el("button.chip.tiny" + (current === value ? ".on" : ""), {
           onclick: () => onPick(value),
         }, text),
       ),
@@ -215,6 +229,21 @@ function topBar(ctx, view) {
 
   bar.append(el("div.grow"));
 
+  if (!isTask) {
+    bar.append(
+      el("div.since", { title: "file modification time — Agent Notes carry a date with no clock time, so anything under a day can only come from when the file was last written" },
+        el("span.rail-label", null, "TOUCHED"),
+        el("div.chips", null,
+          SINCE_WINDOWS.map(([window, label]) =>
+            el("button.chip.tiny" + (filters.since === window ? ".on" : ""), {
+              onclick: () => ctx.setFilter("since", window),
+            }, label),
+          ),
+        ),
+      ),
+    );
+  }
+
   if (!isTask && view?.filters?.includes("search")) {
     const input = el("input", {
       type: "search",
@@ -253,7 +282,7 @@ function areaControl(ctx) {
   segments.forEach((segment, index) => {
     const upto = segments.slice(0, index + 1).join("/");
     const label = segment === OTHER ? "OTHER" : segment;
-    row.append(el("button.chip.on", {
+    row.append(el("button.chip.tiny.on", {
       title: `clear ${upto}`,
       onclick: () => ctx.setFilter("area", segments.slice(0, index).join("/")),
     }, `${label} ×`));
@@ -262,19 +291,19 @@ function areaControl(ctx) {
   if (!selected.endsWith(OTHER)) {
     const { head, tailCount } = areaChildren(ctx.allTasks, selected);
     if (!segments.length) {
-      row.append(el("button.chip" + (selected ? "" : ".on"), {
+      row.append(el("button.chip.tiny" + (selected ? "" : ".on"), {
         onclick: () => ctx.setFilter("area", ""),
       }, "ALL"));
     }
     for (const [key, count] of head) {
       const leaf = key.split("/").pop();
-      row.append(el("button.chip", {
+      row.append(el("button.chip.tiny", {
         title: `${key} · ${count} tasks`,
         onclick: () => ctx.setFilter("area", key),
       }, `${leaf} ${count}`));
     }
     if (tailCount) {
-      row.append(el("button.chip", {
+      row.append(el("button.chip.tiny", {
         title: `${tailCount} smaller areas`,
         onclick: () => ctx.setFilter("area", selected ? `${selected}/${OTHER}` : OTHER),
       }, `OTHER (${tailCount})`));
@@ -288,7 +317,7 @@ function areaControl(ctx) {
 function filterRail(ctx, view) {
   const wanted = view?.filters || [];
   const toolbar = view?.toolbar ? view.toolbar(ctx) : null;
-  const hasChips = wanted.includes("priority") || wanted.includes("area") || wanted.includes("since");
+  const hasChips = wanted.includes("priority") || wanted.includes("area") || wanted.includes("status");
   if (!hasChips && !toolbar) return null;
 
   const rail = el("div.rail");
@@ -299,30 +328,47 @@ function filterRail(ctx, view) {
     ], filters.priority, (v) => ctx.setFilter("priority", v)));
   }
 
-  if (wanted.includes("since")) {
+  if (wanted.includes("status")) {
     if (wanted.includes("priority")) rail.append(el("div.rail-div"));
     rail.append(
-      el("span.rail-label", {
-        title: "file modification time — Agent Notes carry a date with no clock time, so anything under a day can only come from when the file was last written",
-      }, "TOUCHED"),
-      el("div.chips", null,
-        SINCE_WINDOWS.map(([window, label]) =>
-          el("button.chip" + (filters.since === window ? ".on" : ""), {
-            onclick: () => ctx.setFilter("since", window),
-          }, label),
-        ),
-      ),
+      el("button.chip.tiny" + (filters.hideDone ? ".on" : ""), {
+        title: filters.hideDone ? "show done tasks again" : "take done tasks out of every view",
+        onclick: () => ctx.setFilter("hideDone", !filters.hideDone),
+      }, filters.hideDone ? "DONE HIDDEN" : "HIDE DONE"),
     );
   }
 
   if (wanted.includes("area")) {
-    if (wanted.includes("priority") || wanted.includes("since")) rail.append(el("div.rail-div"));
+    if (wanted.includes("priority") || wanted.includes("status")) rail.append(el("div.rail-div"));
     rail.append(...areaControl(ctx));
   }
 
   rail.append(el("div.grow"));
   if (toolbar) rail.append(toolbar);
+
+  if (view?.detailBar) {
+    rail.append(
+      el("button.colbtn.detail-toggle", {
+        title: detailOpen ? "hide the detail strip" : "show the detail strip",
+        onclick: () => {
+          detailOpen = !detailOpen;
+          ensurePersist().write("chrome.detailBar", detailOpen);
+          ctx.rerender();
+        },
+      }, svg(detailOpen ? ICON.chevronUp : ICON.chevronDown, { size: 14, stroke: "currentColor" })),
+    );
+  }
   return rail;
+}
+
+/**
+ * The third chrome row. A view opts in with `detailBar(ctx)`; anything it
+ * returns lives here instead of competing for space in the filter rail.
+ */
+function detailStrip(ctx, view) {
+  const content = view.detailBar(ctx);
+  if (!content) return null;
+  return el("div.detailbar", null, content);
 }
 
 /* ── render ──────────────────────────────────────────────── */
@@ -351,12 +397,15 @@ function render(options = {}) {
 
   const bar = topBar(ctx, view);
   const rail = filterRail(ctx, view);
+  const detail = detailOpen && view.detailBar ? detailStrip(ctx, view) : null;
 
   if (active?.view?.id === view.id && active.node.isConnected && view.update) {
     // Keep the view's DOM (and its scroll position) and swap only the chrome.
-    root.replaceChild(bar, root.firstChild);
-    const existingRail = root.children[1];
-    if (rail && existingRail?.classList.contains("rail")) root.replaceChild(rail, existingRail);
+    // The chrome rows vary in number, so they are rebuilt as a block ahead of
+    // the view node rather than replaced by index.
+    while (root.firstChild && root.firstChild !== active.node) root.removeChild(root.firstChild);
+    const head = [bar, rail, detail].filter(Boolean);
+    for (const row of head) root.insertBefore(row, active.node);
     view.update(active.node, ctx);
   } else {
     teardown();
@@ -365,6 +414,7 @@ function render(options = {}) {
     clear(root);
     root.append(bar);
     if (rail) root.append(rail);
+    if (detail) root.append(detail);
     root.append(node);
   }
 

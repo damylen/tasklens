@@ -105,6 +105,25 @@ with open dependants outranks a finished one.
 status, the full note history, and a rail carrying relations, references and
 file stats.
 
+### The three chrome rows
+
+The top bar carries identity, navigation, the `TOUCHED` recency control, search
+and totals. The filter rail below it carries the shared filters — priority,
+`HIDE DONE`, the area drill-down — plus whatever controls the active view owns.
+A third row appears only for views that offer one, holding the wider things that
+would otherwise crowd the rail; the timeline puts its notes-per-day chart there.
+That row collapses from the chevron at the end of the rail and remembers whether
+it was open, per backlog.
+
+### Hiding done work
+
+`HIDE DONE` takes done tasks out of every view at once, which is different from
+hiding the kanban's Done column — that only affects the board. One place where
+done still shows through: a done umbrella that still has unfinished children
+stays visible in `Groups`, because there is no way to show an open child without
+its parent. Such a row is always an ancestor of work that passed the filter,
+never a leaf.
+
 ### Filtering by recency
 
 The `TOUCHED` control offers `1h`, `4h`, `8h`, `1d`, `2d`, `7d` and `1m`. It
@@ -163,9 +182,14 @@ export default {
     root.textContent = `${ctx.tasks.length} tasks match`;
   },
 
-  // optional: controls on the right of the filter rail
+  // optional: compact controls on the right of the filter rail
   toolbar(ctx) {
-    return el("button.chip", { onclick: () => ctx.rerender() }, "REFRESH");
+    return el("button.chip.tiny", { onclick: () => ctx.rerender() }, "REFRESH");
+  },
+
+  // optional: a wider strip below the rail, collapsible by the viewer
+  detailBar(ctx) {
+    return el("div", null, `${ctx.allNotes.length} notes in range`);
   },
 
   // optional: release anything mount() held
@@ -189,8 +213,9 @@ entry is the default view.
 [`public/lib/registry.js`](public/lib/registry.js).
 
 `filters` lists the shared controls the chrome should render for that view:
-`"search"`, `"priority"`, `"since"`, `"area"`. Declaring none gives a view the
-rail to itself via `toolbar()`. `ctx.toggleArea(path)` is what makes an area
+`"search"`, `"priority"`, `"status"`, `"area"`. Recency is global chrome and
+needs no declaration. Declaring none gives a view the rail to itself via
+`toolbar()`, and anything too wide for the rail belongs in `detailBar()`. `ctx.toggleArea(path)` is what makes an area
 label clickable; a view that shows areas should use `areaLabel()` from
 `public/lib/area.js` rather than rendering the string itself.
 

@@ -1,7 +1,6 @@
 import { el, clear, svg, ICON } from "../lib/dom.js";
 import { ago, num } from "../lib/format.js";
 import { virtualList } from "../lib/virtual.js";
-import { createStore } from "../lib/persist.js";
 import { areaLabel } from "../lib/area.js";
 
 const COLUMNS = [
@@ -32,7 +31,7 @@ const lists = [];
 function ensureStore(ctx) {
   const root = ctx.meta?.root || "";
   if (persisted && persisted.root === root) return;
-  persisted = { root, store: createStore(root) };
+  persisted = { root, store: ctx.persist };
   const saved = persisted.store.read("kanban.columns", null);
   columnState = saved && typeof saved === "object"
     ? { ...defaults(), ...saved }
@@ -183,7 +182,7 @@ function build(ctx) {
 export default {
   id: "kanban",
   label: "Kanban",
-  filters: ["search", "priority", "area", "since"],
+  filters: ["search", "priority", "status", "area"],
 
   toolbar(ctx) {
     ensureStore(ctx);
@@ -193,14 +192,14 @@ export default {
         COLUMNS.map((def) => {
           const state = columnState[def.key];
           const on = state !== HIDDEN;
-          return el("button.chip" + (on ? ".on" : ""), {
+          return el("button.chip.tiny" + (on ? ".on" : ""), {
             title: on ? `hide ${def.label}` : `show ${def.label}`,
             style: on ? { color: `var(--st-${def.key})`, borderColor: "#3d3a31" } : null,
             onclick: () => setColumn(def.key, on ? HIDDEN : EXPANDED, ctx),
           }, def.label);
         }),
       ),
-      el("button.chip", {
+      el("button.chip.tiny", {
         title: "expand every visible column",
         onclick: () => {
           for (const def of COLUMNS) {
