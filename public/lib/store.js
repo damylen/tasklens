@@ -82,6 +82,20 @@ export class ClientStore {
     return [...this.backlogs.values()];
   }
 
+  async addBacklog(label, dir) {
+    const response = await fetch("/api/backlogs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label, dir }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `could not add backlog (${response.status})`);
+    const backlog = payload.backlog;
+    this.backlogs.set(backlog.id, { ...backlog, tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])) });
+    this.emit("add");
+    return backlog;
+  }
+
   connect() {
     if (this.source) return;
     const source = new EventSource("/api/events");

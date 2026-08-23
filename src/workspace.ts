@@ -13,6 +13,7 @@ type Listener = (backlog: BacklogSnapshot, change: Change) => void;
 export class WorkspaceStore {
   private stores = new Map<string, { config: BacklogConfig; store: TaskStore }>();
   private listeners = new Set<Listener>();
+  private watching = false;
 
   constructor(backlogs: BacklogConfig[]) {
     for (const config of backlogs) {
@@ -25,17 +26,31 @@ export class WorkspaceStore {
     await Promise.all([...this.stores.values()].map(async ({ store }) => store.scan()));
   }
 
+  /** Scan before publishing the new source, so an unreadable directory never becomes a half-backlog. */
+  async add(config: BacklogConfig): Promise<BacklogSnapshot> {
+    if (this.stores.has(config.id)) throw new Error(`backlog '${config.id}' already exists`);
+    const store = new TaskStore(config.dir);
+    await store.scan();
+    this.stores.set(config.id, { config, store });
+    if (this.watching) this.attach(config, store);
+    return this.snapshot(config.id)!;
+  }
+
   watch(): void {
-    for (const entry of this.stores.values()) {
-      entry.store.subscribe((change) => {
-        const backlog = this.snapshot(entry.config.id);
+    if (this.watching) return;
+    this.watching = true;
+    for (const { config, store } of this.stores.values()) this.attach(config, store);
+  }
+
+  private attach(config: BacklogConfig, store: TaskStore): void {
+    store.subscribe((change) => {
+        const backlog = this.snapshot(config.id);
         if (!backlog) return;
         for (const listener of this.listeners) {
           try { listener(backlog, change); } catch { /* one stream cannot freeze the others */ }
         }
       });
-      entry.store.watch();
-    }
+    store.watch();
   }
 
   snapshot(id: string): BacklogSnapshot | undefined {

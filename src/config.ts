@@ -21,6 +21,15 @@ function normalizeId(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+export function createBacklog(label: string, dir: string): BacklogConfig {
+  const id = normalizeId(label);
+  if (!id) throw new Error("backlog name must contain a letter or number");
+  const cleanLabel = label.trim();
+  const cleanDir = dir.trim();
+  if (!cleanDir) throw new Error("backlog directory is required");
+  return { id, label: cleanLabel, dir: resolve(cleanDir) };
+}
+
 export async function loadBacklogs(path = defaultConfigPath()): Promise<BacklogConfig[]> {
   try {
     const parsed = JSON.parse(await readFile(path, "utf8")) as Partial<ConfigFile>;
@@ -48,11 +57,9 @@ export async function saveBacklogs(backlogs: BacklogConfig[], path = defaultConf
 }
 
 export async function addBacklog(label: string, dir: string, path = defaultConfigPath()): Promise<BacklogConfig> {
-  const id = normalizeId(label);
-  if (!id) throw new Error("backlog name must contain a letter or number");
+  const backlog = createBacklog(label, dir);
   const backlogs = await loadBacklogs(path);
-  if (backlogs.some((backlog) => backlog.id === id)) throw new Error(`backlog '${id}' already exists`);
-  const backlog = { id, label: label.trim(), dir: resolve(dir) };
+  if (backlogs.some((existing) => existing.id === backlog.id)) throw new Error(`backlog '${backlog.id}' already exists`);
   await saveBacklogs([...backlogs, backlog], path);
   return backlog;
 }

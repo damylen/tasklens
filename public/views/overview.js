@@ -7,7 +7,7 @@ function active(backlog) {
   return [...backlog.tasks.values()].filter((task) => task.status === "in_progress" && task.mtime >= Date.now() - HOUR).length;
 }
 
-export function renderOverview(backlogs, open) {
+export function renderOverview(backlogs, open, add) {
   const total = backlogs.reduce((sum, backlog) => sum + backlog.meta.total, 0);
   const activeCount = backlogs.reduce((sum, backlog) => sum + active(backlog), 0);
   return el("div.overview", null,
@@ -41,6 +41,34 @@ export function renderOverview(backlogs, open) {
           ),
         );
       }),
+      addBacklogCard(add),
     ),
   );
+}
+
+function addBacklogCard(add) {
+  const label = el("input", { type: "text", placeholder: "Name, e.g. client", required: true });
+  const dir = el("input", { type: "text", placeholder: "/path/to/project/TASKS", required: true });
+  const notice = el("div.backlog-add-notice");
+  const submit = el("button.chip.on", { type: "submit" }, "ADD BACKLOG");
+  const form = el("form.backlog-add", {
+    onsubmit: async (event) => {
+      event.preventDefault();
+      notice.textContent = "Adding and scanning…";
+      notice.className = "backlog-add-notice";
+      submit.disabled = true;
+      try {
+        await add(label.value, dir.value);
+      } catch (error) {
+        notice.textContent = error.message || "Could not add this backlog";
+        notice.className = "backlog-add-notice error";
+        submit.disabled = false;
+      }
+    },
+  },
+    el("div.backlog-card-name", null, "Add backlog"),
+    el("div.backlog-add-copy", null, "Start watching another local TASKS folder."),
+    label, dir, submit, notice,
+  );
+  return el("div.backlog-card.backlog-add-card", null, form);
 }

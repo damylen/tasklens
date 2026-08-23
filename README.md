@@ -39,6 +39,11 @@ count and in-progress work touched in the last hour. Each named tab then opens t
 Timeline, Groups and Files views for that backlog only. Task numbers and task relationships never
 cross a backlog boundary, even when folders both contain a task named `0001`.
 
+You can also add a backlog from the **Add backlog** card on Overview. Enter a name and the local
+`TASKS/` folder path; TaskLens validates and scans it before starting its watcher. The form writes
+the same local configuration as `tasklens backlog add` and shows validation errors without changing
+the existing workspace.
+
 Plain `tasklens` remains the quick one-backlog command: it discovers the nearest `TASKS/` directory
 and serves it as before.
 

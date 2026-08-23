@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkspaceStore } from "../src/workspace.ts";
 import { createApp } from "../src/server.ts";
+import { loadBacklogs } from "../src/config.ts";
 
 const dirs: string[] = [];
 afterEach(async () => { for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true }); });
@@ -42,6 +43,23 @@ describe("workspace store", () => {
     const payload = await (await app.request("http://tasklens.local/api/backlogs")).json() as { backlogs: Array<{ id: string; tasks: Array<{ status: string }> }> };
     expect(payload.backlogs.map((backlog) => backlog.id)).toEqual(["alpha", "beta"]);
     expect(payload.backlogs[1]!.tasks[0]!.status).toBe("in_progress");
+    workspace.close();
+  });
+
+  test("adds, scans and persists a backlog through the local server", async () => {
+    const [alpha, beta] = await Promise.all([backlog("Alpha", "open"), backlog("Beta", "in_progress")]);
+    const workspace = new WorkspaceStore([{ id: "alpha", label: "Alpha", dir: alpha }]);
+    await workspace.scan();
+    const configPath = join(alpha, "tasklens-backlogs.json");
+    const app = createApp(workspace, { configPath });
+    const response = await app.request("http://tasklens.local/api/backlogs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "Beta", dir: beta }),
+    });
+    expect(response.status).toBe(201);
+    expect(workspace.get("beta")!.get("0001")!.status).toBe("in_progress");
+    expect((await loadBacklogs(configPath)).map((backlog) => backlog.id)).toEqual(["alpha", "beta"]);
     workspace.close();
   });
 });

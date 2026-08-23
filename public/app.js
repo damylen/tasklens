@@ -502,7 +502,7 @@ function render(options = {}) {
     root.append(renderOverview(store.listBacklogs(), (backlog) => {
       selectBacklog(backlog);
       navigate(backlogHash(backlog));
-    }));
+    }, (label, dir) => store.addBacklog(label, dir)));
     return;
   }
 

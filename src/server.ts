@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { readFile } from "node:fs/promises";
 import { dirname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createBacklog, defaultConfigPath, saveBacklogs } from "./config.ts";
 import type { WorkspaceStore } from "./workspace.ts";
 
 const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "public");
@@ -15,7 +16,7 @@ const MIME: Record<string, string> = {
   ".json": "application/json; charset=utf-8",
 };
 
-export function createApp(workspace: WorkspaceStore): Hono {
+export function createApp(workspace: WorkspaceStore, { configPath = defaultConfigPath() }: { configPath?: string } = {}): Hono {
   const app = new Hono();
 
   app.get("/api/backlogs", (c) => c.json({
@@ -24,6 +25,19 @@ export function createApp(workspace: WorkspaceStore): Hono {
       tasks: workspace.get(backlog.id)?.list() ?? [],
     })),
   }));
+
+  app.post("/api/backlogs", async (c) => {
+    let body: { label?: unknown; dir?: unknown };
+    try { body = await c.req.json(); } catch { return c.json({ error: "expected JSON body" }, 400); }
+    try {
+      const backlog = createBacklog(String(body.label || ""), String(body.dir || ""));
+      const snapshot = await workspace.add(backlog);
+      await saveBacklogs(workspace.list().map(({ id, label, dir }) => ({ id, label, dir })), configPath);
+      return c.json({ backlog: { ...snapshot, tasks: workspace.get(snapshot.id)?.list() ?? [] } }, 201);
+    } catch (error) {
+      return c.json({ error: (error as Error).message || "could not add backlog" }, 400);
+    }
+  });
 
   app.get("/api/backlogs/:backlog/tasks/:key", (c) => {
     const store = workspace.get(c.req.param("backlog"));
