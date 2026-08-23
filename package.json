@@ -1,0 +1,33 @@
+{
+  "name": "tasklens",
+  "version": "0.1.0",
+  "description": "A live dashboard for a markdown TASKS/ backlog. Kanban, timeline and task detail, served from any folder.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "tasklens": "./bin/tasklens.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "public",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "scripts": {
+    "start": "bun run bin/tasklens.js",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.6.14"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.7.2"
+  },
+  "keywords": ["tasks", "markdown", "kanban", "timeline", "dashboard", "bun", "hono"]
+}
