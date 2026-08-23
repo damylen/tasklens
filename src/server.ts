@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { createBacklog, defaultConfigPath, saveBacklogs } from "./config.ts";
 import type { WorkspaceStore } from "./workspace.ts";
 
-const PUBLIC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "public");
+// The desktop bundle supplies the same static UI as a Tauri resource. Keeping
+// this override here means the server remains the single owner of its HTTP UI.
+const PUBLIC_DIR = resolve(process.env.TASKLENS_PUBLIC_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "public"));
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

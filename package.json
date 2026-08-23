@@ -32,12 +32,19 @@
     "start": "bun run bin/tasklens.js",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
-    "check:release": "bun run typecheck && bun test && npm pack --dry-run"
+    "check:release": "bun run typecheck && bun test && npm pack --dry-run",
+    "desktop:prepare": "bun run desktop/scripts/prepare-sidecar.ts",
+    "desktop:dev": "bunx tauri dev --config desktop/src-tauri/tauri.conf.json",
+    "desktop:build": "bun run desktop:prepare && bunx tauri build --config desktop/src-tauri/tauri.conf.json",
+    "desktop:release-build": "bun run desktop:prepare && bun run desktop/scripts/prepare-release-config.ts && bunx tauri build --config desktop/src-tauri/tauri.release.conf.json"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "hono": "^4.6.14"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/bun": "^1.1.14",
     "typescript": "^5.7.2"
   },

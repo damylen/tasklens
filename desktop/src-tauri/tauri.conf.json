@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TaskLens",
+  "version": "../../package.json",
+  "identifier": "io.tasklens.desktop",
+  "build": {
+    "frontendDist": "../../public"
+  },
+  "app": {
+    "windows": []
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "externalBin": ["binaries/tasklens-server"],
+    "resources": ["../../public"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}

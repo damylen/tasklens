@@ -15,6 +15,7 @@ interface Options {
   backlogs: Array<{ id: string; label: string; dir: string }>;
   port: number | null;
   host: string;
+  empty: boolean;
   open: boolean;
   help: boolean;
   version: boolean;
@@ -23,7 +24,7 @@ interface Options {
 function parseArgs(argv: string[]): Options {
   const options: Options = {
     dir: null, command: null, backlogCommand: null, backlogArgs: [], backlogs: [],
-    port: null, host: "127.0.0.1", open: true, help: false, version: false,
+    port: null, host: "127.0.0.1", empty: false, open: true, help: false, version: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] ?? "";
@@ -31,6 +32,7 @@ function parseArgs(argv: string[]): Options {
     else if (arg === "--version" || arg === "-v") options.version = true;
     else if (arg === "--no-open") options.open = false;
     else if (arg === "--open") options.open = true;
+    else if (arg === "--empty") options.empty = true;
     else if (arg === "--port" || arg === "-p") options.port = Number(argv[++i]);
     else if (arg.startsWith("--port=")) options.port = Number(arg.slice(7));
     else if (arg === "--host") options.host = String(argv[++i] ?? options.host);
@@ -133,6 +135,7 @@ const HELP = `
     -p, --port <n>   Port to listen on. Defaults to the first free port from ${DEFAULT_PORT}.
         --host <h>   Interface to bind. Defaults to 127.0.0.1.
         --no-open    Do not open a browser.
+        --empty      Start an empty workspace; add folders from the web app.
         --backlog <name=dir>
                       Add a backlog for this one server process; repeatable.
     -v, --version    Print the version.
@@ -184,7 +187,7 @@ export async function main(argv = Bun.argv.slice(2)): Promise<void> {
 
   let backlogs = options.backlogs.map((backlog) => ({ ...backlog, dir: resolve(backlog.dir) }));
   if (options.command === "serve" && !backlogs.length) backlogs = await loadBacklogs();
-  if (!backlogs.length) {
+  if (!backlogs.length && !options.empty) {
     const start = resolve(options.dir ?? process.cwd());
     if (!existsSync(start)) {
       console.error(`tasklens: no such directory: ${start}`);
@@ -213,7 +216,7 @@ export async function main(argv = Bun.argv.slice(2)): Promise<void> {
   const began = Date.now();
   await workspace.scan();
   const snapshots = workspace.list();
-  if (!snapshots.some((backlog) => backlog.meta.total)) {
+  if (!options.empty && !snapshots.some((backlog) => backlog.meta.total)) {
     console.error("tasklens: configured backlogs hold no NNNN-*.md task files");
     process.exit(1);
   }
