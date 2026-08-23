@@ -38,6 +38,47 @@ When working from a clone instead of an installed package, replace
 Keep project-specific coding, testing, and release instructions in the
 project's own agent files; the starter kit only governs shared task tracking.
 
+## Release and npm publishing
+
+Publishing is deliberately tag-only: pushing to `main` never releases a
+package. The GitHub Actions workflow checks out a `vX.Y.Z` tag, requires it to
+match `package.json`, installs from `bun.lock`, runs `bun run check:release`,
+and refuses an npm version that already exists.
+
+Before the first release, the package owner must complete one of these npm
+authentication setups:
+
+1. Preferred: in the npm package settings, configure a **Trusted Publisher**
+   for GitHub Actions with owner `damylen`, repository `tasklens`, and workflow
+   filename `publish.yml`. Allow `npm publish`. This uses short-lived OIDC
+   credentials; no token is stored in GitHub.
+2. Fallback: create a granular npm automation token limited to this package
+   and add it as the GitHub repository secret `NPM_TOKEN`. Remove the secret
+   after trusted publishing has been verified.
+
+Protect `v*` tags in GitHub so only release maintainers can create or move
+them. Then release a new version from a clean, validated branch:
+
+```sh
+# Update package.json and bun.lock as needed, then commit the release change.
+bun run check:release
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The tag starts the workflow; it does not run for ordinary branch pushes. npm
+trusted publishing requires a GitHub-hosted runner, `id-token: write`, npm CLI
+11.5.1 or newer, and Node 22.14 or newer. The workflow uses Node 24. npm does
+not currently produce provenance attestations for packages released from a
+private GitHub repository, even when trusted publishing is used.
+
+Consumers can install the released CLI with:
+
+```sh
+bun add -g tasklens
+tasklens
+```
+
 ## What it reads
 
 Only `NNNN-*.md` at the root of the tasks directory. Subdirectories are neither

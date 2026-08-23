@@ -1,0 +1,66 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install from the lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Check the tag matches package.json
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          test "$RELEASE_TAG" = "v$package_version" || {
+            echo "Tag $RELEASE_TAG does not match package version $package_version" >&2
+            exit 1
+          }
+
+      - name: Validate the release artefact
+        run: bun run check:release
+
+      - name: Refuse an existing npm version
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            "https://registry.npmjs.org/${package_name}/${package_version}")"
+          case "$status" in
+            404) ;;
+            200)
+              echo "${package_name}@${package_version} is already published" >&2
+              exit 1
+              ;;
+            *)
+              echo "Could not verify npm registry state (HTTP $status)" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Publish
+        env:
+          # OIDC is used when npm trusted publishing is configured. This secret
+          # is an optional, scoped fallback for the initial release only.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish

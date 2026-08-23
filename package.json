@@ -4,6 +4,16 @@
   "description": "A live dashboard for a markdown TASKS/ backlog. Kanban, timeline and task detail, served from any folder.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/damylen/tasklens.git"
+  },
+  "bugs": "https://github.com/damylen/tasklens/issues",
+  "homepage": "https://github.com/damylen/tasklens#readme",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
   "bin": {
     "tasklens": "./bin/tasklens.js"
   },
@@ -21,7 +31,8 @@
   "scripts": {
     "start": "bun run bin/tasklens.js",
     "test": "bun test",
-    "typecheck": "bunx tsc --noEmit"
+    "typecheck": "bunx tsc --noEmit",
+    "check:release": "bun run typecheck && bun test && npm pack --dry-run"
   },
   "dependencies": {
     "hono": "^4.6.14"
