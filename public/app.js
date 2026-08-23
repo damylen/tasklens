@@ -13,14 +13,70 @@ const filters = { q: "", priority: "all", area: "", since: 0, hideDone: false };
 
 /** One namespaced store shared by the chrome and every view. */
 let persist = null;
+let detailOpen = true;
+let lastView = null;
+
 function ensurePersist() {
   const root = store.meta?.root || "";
   if (persist && persist.root === root) return persist.store;
   persist = { root, store: createStore(root) };
+  lastView = null;
   detailOpen = persist.store.read("chrome.detailBar", true) !== false;
   return persist.store;
 }
-let detailOpen = true;
+
+/** Working state worth keeping. Search text is not: it is a momentary lookup,
+ *  and restoring it would open onto a backlog that looks nearly empty. */
+function saveFilters() {
+  persist?.store.write("chrome.filters", {
+    hideDone: filters.hideDone,
+    area: filters.area,
+    since: filters.since,
+  });
+}
+
+function saveView(id) {
+  if (!id || lastView === id) return;
+  lastView = id;
+  persist?.store.write("chrome.view", id);
+}
+
+/**
+ * Restore once the tasks are in, because the stored values have to be checked
+ * against them: an area whose group no longer exists, or a window no longer
+ * offered, would otherwise restore a board that looks empty for no reason.
+ */
+function restoreState(tasks) {
+  const store_ = ensurePersist();
+  filters.hideDone = false;
+  filters.area = "";
+  filters.since = 0;
+
+  const saved = store_.read("chrome.filters", null);
+  if (saved && typeof saved === "object") {
+    filters.hideDone = saved.hideDone === true;
+    if (SINCE_WINDOWS.some(([window]) => window === saved.since)) filters.since = saved.since;
+    if (typeof saved.area === "string" && saved.area) {
+      const known = new Set();
+      for (const task of tasks) {
+        for (const path of task.areaPaths) {
+          const parts = path.split("/");
+          for (let i = 1; i <= parts.length; i++) known.add(parts.slice(0, i).join("/"));
+        }
+      }
+      const isOther = saved.area === OTHER || saved.area.endsWith(`/${OTHER}`);
+      const prefix = isOther
+        ? saved.area.slice(0, saved.area === OTHER ? 0 : -(OTHER.length + 1))
+        : saved.area;
+      if (isOther ? areaChildren(tasks, prefix).tailCount : known.has(prefix)) {
+        filters.area = saved.area;
+      }
+    }
+  }
+
+  const view = store_.read("chrome.view", null);
+  if (typeof view === "string" && getView(view)?.id === view) lastView = view;
+}
 let route = { kind: "view", id: defaultViewId() };
 let active = null;      // { view, node }
 let searchInput = null;
@@ -97,10 +153,12 @@ function buildContext() {
     persist: ensurePersist(),
     setFilter(key, value) {
       filters[key] = value;
+      saveFilters();
       render();
     },
     toggleArea(path) {
       filters.area = filters.area === path ? "" : path;
+      saveFilters();
       render();
     },
     goView(id) {
@@ -113,7 +171,7 @@ function buildContext() {
       navigate(`#/task/${encodeURIComponent(id)}`);
     },
     goBack() {
-      navigate(`#/${route.previousView || defaultViewId()}`);
+      navigate(`#/${lastView || defaultViewId()}`);
     },
     rerender() {
       render();
@@ -210,7 +268,7 @@ function topBar(ctx, view) {
   const task = isTask ? store.get(route.key) : null;
 
   const bar = el("div.bar", null,
-    el("div.brand", { onclick: () => navigate(`#/${defaultViewId()}`) },
+    el("div.brand", { title: "back to the last view you were on", onclick: () => navigate(`#/${lastView || defaultViewId()}`) },
       svg([
         "M12 5a7 7 0 100 14 7 7 0 000-14z",
         "M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3",
@@ -406,6 +464,7 @@ function render(options = {}) {
 
   const view = getView(route.id);
   if (!view) return;
+  saveView(view.id);
 
   const bar = topBar(ctx, view);
   const rail = filterRail(ctx, view);
@@ -466,6 +525,11 @@ route = readHash();
 
 store.load()
   .then(() => {
+    restoreState(store.list());
+    // An explicit hash is someone's link and always wins over stored state.
+    if (!location.hash.replace(/^#\/?/, "") && lastView) {
+      route = { kind: "view", id: lastView, param: null };
+    }
     store.connect();
     render();
   })
