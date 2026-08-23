@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WorkspaceStore } from "../src/workspace.ts";
+import { discoverTaskDirs, WorkspaceStore } from "../src/workspace.ts";
 import { createApp } from "../src/server.ts";
 import { loadBacklogs } from "../src/config.ts";
 
@@ -60,6 +60,24 @@ describe("workspace store", () => {
     expect(response.status).toBe(201);
     expect(workspace.get("beta")!.get("0001")!.status).toBe("in_progress");
     expect((await loadBacklogs(configPath)).map((backlog) => backlog.id)).toEqual(["alpha", "beta"]);
+    workspace.close();
+  });
+
+  test("discovers task folders below a project root but skips dependency trees", async () => {
+    const root = await mkdtemp(join(tmpdir(), "tasklens-project-"));
+    dirs.push(root);
+    const tasks = join(root, "packages", "app", "TASKS");
+    await mkdir(join(root, "node_modules", "ignored", "TASKS"), { recursive: true });
+    await mkdir(tasks, { recursive: true });
+    await writeFile(join(tasks, "0001-real.md"), "# 0001 Real\n\nStatus: open\n");
+    await mkdir(join(root, "docs", "adr"), { recursive: true });
+    await writeFile(join(root, "docs", "adr", "0003-not-a-backlog.md"), "# 0003 Not a backlog\n");
+    await writeFile(join(root, "node_modules", "ignored", "TASKS", "0002-ignored.md"), "# 0002 Ignored\n");
+    expect(await discoverTaskDirs(root)).toEqual([tasks]);
+    const workspace = new WorkspaceStore([{ id: "project", label: "Project", dir: root }]);
+    await workspace.scan();
+    expect(workspace.get("project")!.meta().total).toBe(1);
+    expect(workspace.list()[0]!.dir).toBe(tasks);
     workspace.close();
   });
 });

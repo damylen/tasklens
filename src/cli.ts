@@ -160,8 +160,8 @@ async function manageBacklogs(options: Options): Promise<void> {
   const [name, dir] = options.backlogArgs;
   if (options.backlogCommand === "add") {
     if (!name || !dir) throw new Error("usage: tasklens backlog add <name> <directory>");
-    const root = findTasksDir(resolve(dir));
-    if (!root) throw new Error(`no TASKS/ directory found at or above ${resolve(dir)}`);
+    const root = resolve(dir);
+    if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`no directory found at ${root}`);
     const backlog = await addBacklog(name, root);
     console.log(`saved ${backlog.label} (${backlog.id}) → ${backlog.dir}`);
     return;
@@ -182,7 +182,7 @@ export async function main(argv = Bun.argv.slice(2)): Promise<void> {
   if (options.version) { console.log(VERSION); return; }
   if (options.command === "backlog") { await manageBacklogs(options); return; }
 
-  let backlogs = options.backlogs.map((backlog) => ({ ...backlog, dir: findTasksDir(resolve(backlog.dir)) || "" }));
+  let backlogs = options.backlogs.map((backlog) => ({ ...backlog, dir: resolve(backlog.dir) }));
   if (options.command === "serve" && !backlogs.length) backlogs = await loadBacklogs();
   if (!backlogs.length) {
     const start = resolve(options.dir ?? process.cwd());

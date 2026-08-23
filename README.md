@@ -25,8 +25,9 @@ tasklens serve
 
 `tasklens backlog list` shows the saved names and `tasklens backlog remove <name>` removes one.
 The configuration is stored in your user config directory (`~/.config/tasklens/backlogs.json` on
-macOS/Linux), never in a project's `TASKS/` folder. A saved entry resolves its directory to the
-actual `TASKS/` folder when it is added, so a repository root or its task folder both work.
+macOS/Linux), never in a project's `TASKS/` folder. At startup TaskLens discovers matching
+`TASKS/` folders beneath each configured project once, then watches only those folders. A project
+with several independent task folders receives one source tab per task folder.
 
 For a one-off workspace that leaves no configuration behind, repeat `--backlog`:
 
@@ -39,8 +40,8 @@ count and in-progress work touched in the last hour. Each named tab then opens t
 Timeline, Groups and Files views for that backlog only. Task numbers and task relationships never
 cross a backlog boundary, even when folders both contain a task named `0001`.
 
-You can also add a backlog from the **Add backlog** card on Overview. Enter a name and the local
-`TASKS/` folder path; TaskLens validates and scans it before starting its watcher. The form writes
+You can also add a backlog from the **Add backlog** card on Overview. Enter a name and either a
+local project or `TASKS/` folder path; TaskLens validates and scans it before starting its watcher. The form writes
 the same local configuration as `tasklens backlog add` and shows validation errors without changing
 the existing workspace.
 

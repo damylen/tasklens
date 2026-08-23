@@ -48,7 +48,7 @@ export function renderOverview(backlogs, open, add) {
 
 function addBacklogCard(add) {
   const label = el("input", { type: "text", placeholder: "Name, e.g. client", required: true });
-  const dir = el("input", { type: "text", placeholder: "/path/to/project/TASKS", required: true });
+  const dir = el("input", { type: "text", placeholder: "/path/to/project or TASKS", required: true });
   const notice = el("div.backlog-add-notice");
   const submit = el("button.chip.on", { type: "submit" }, "ADD BACKLOG");
   const form = el("form.backlog-add", {

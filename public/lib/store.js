@@ -90,10 +90,12 @@ export class ClientStore {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || `could not add backlog (${response.status})`);
-    const backlog = payload.backlog;
-    this.backlogs.set(backlog.id, { ...backlog, tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])) });
+    const backlogs = payload.backlogs || [];
+    for (const backlog of backlogs) {
+      this.backlogs.set(backlog.id, { ...backlog, tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])) });
+    }
     this.emit("add");
-    return backlog;
+    return backlogs;
   }
 
   connect() {

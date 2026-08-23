@@ -31,9 +31,11 @@ export function createApp(workspace: WorkspaceStore, { configPath = defaultConfi
     try { body = await c.req.json(); } catch { return c.json({ error: "expected JSON body" }, 400); }
     try {
       const backlog = createBacklog(String(body.label || ""), String(body.dir || ""));
-      const snapshot = await workspace.add(backlog);
-      await saveBacklogs(workspace.list().map(({ id, label, dir }) => ({ id, label, dir })), configPath);
-      return c.json({ backlog: { ...snapshot, tasks: workspace.get(snapshot.id)?.list() ?? [] } }, 201);
+      const snapshots = await workspace.add(backlog);
+      await saveBacklogs(workspace.configuredBacklogs(), configPath);
+      return c.json({ backlogs: snapshots.map((snapshot) => ({
+        ...snapshot, tasks: workspace.get(snapshot.id)?.list() ?? [],
+      })) }, 201);
     } catch (error) {
       return c.json({ error: (error as Error).message || "could not add backlog" }, 400);
     }
