@@ -9,11 +9,19 @@
   "app": {
     "windows": []
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "",
+      "endpoints": []
+    }
+  },
   "bundle": {
     "active": true,
     "category": "DeveloperTool",
     "externalBin": ["binaries/tasklens-server"],
-    "resources": ["../../public"],
+    "resources": {
+      "../../public/": "public/"
+    },
     "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"]
   }
 }

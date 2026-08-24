@@ -17,6 +17,9 @@ Use this skill when work should be recorded in the repo-local `TASKS/` backlog f
    - child task uses `Parent: NNNN-title` and `Depends on:` when sequencing matters
 5. Update `Status`, `Owner`, `Agent`, and `Agent Notes` as work progresses.
 6. Record blockers and next concrete handoff steps in the task file before stopping.
+7. Use an optional `Features:` field only when the project has stable Product
+   Feature ids and the task materially contributes to one. Reuse an existing
+   feature for small extensions; do not invent feature ids as task labels.
 
 ## Task Contract
 
@@ -33,6 +36,7 @@ Area: general
 Parent: none
 Depends on: none
 References: none
+Features: example:sharing, example:export
 
 ## Context
 ...
@@ -49,6 +53,10 @@ References: none
 ## Agent Notes
 - ...
 ```
+
+Omit `Features:` in projects without a feature catalog or when the task has no
+meaningful feature relationship. Feature metadata does not make a task a
+release candidate.
 
 ## Reference Material
 

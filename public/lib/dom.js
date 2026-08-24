@@ -64,4 +64,5 @@ export const ICON = {
   clock: ["M12 21a9 9 0 100-18 9 9 0 000 18z", "M12 7v5l3 2"],
   chevronUp: "M6 15l6-6 6 6",
   chevronDown: "M6 9l6 6 6-6",
+  info: ["M12 22a10 10 0 100-20 10 10 0 000 20z", "M12 10v6M12 7h.01"],
 };

@@ -9,7 +9,7 @@ const suffix = process.platform === "win32" ? ".exe" : "";
 const output = resolve(root, "desktop", "src-tauri", "binaries", `tasklens-server-${triple}${suffix}`);
 
 await mkdir(resolve(root, "desktop", "src-tauri", "binaries"), { recursive: true });
-await $`bun build --compile ${resolve(root, "src", "cli.ts")} --outfile ${output}`;
+await $`bun build --compile ${resolve(root, "bin", "tasklens.js")} --outfile ${output}`;
 
 if (!existsSync(output)) throw new Error(`TaskLens sidecar was not created: ${basename(output)}`);
 console.log(`Prepared native TaskLens sidecar: ${basename(output)}`);

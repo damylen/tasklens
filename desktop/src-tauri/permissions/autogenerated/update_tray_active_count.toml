@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-tray-active-count"
+description = "Enables the update_tray_active_count command without any pre-configured scope."
+commands.allow = ["update_tray_active_count"]
+
+[[permission]]
+identifier = "deny-update-tray-active-count"
+description = "Denies the update_tray_active_count command without any pre-configured scope."
+commands.deny = ["update_tray_active_count"]

@@ -36,8 +36,8 @@ tasklens serve --backlog cs=~/work/cs --backlog tasklens=~/work/tasklens
 ```
 
 The first tab is **Overview**, with a card for every backlog and its status distribution, blocked
-count and in-progress work touched in the last hour. Each named tab then opens the usual Kanban,
-Timeline, Groups and Files views for that backlog only. Task numbers and task relationships never
+count and in-progress work touched in the last hour. Each named tab then opens the Kanban,
+Timeline, Groups, Files, optional Features, and Unreleased views for that backlog only. Task numbers and task relationships never
 cross a backlog boundary, even when folders both contain a task named `0001`.
 
 You can also add a backlog from the **Add backlog** card on Overview. Enter a name and either a
@@ -69,9 +69,20 @@ When working from a clone instead of an installed package, replace
   GitHub Copilot.
 - `TASKS/README.md` — documents the task-file contract without becoming a task
   card itself.
+- `.agents/skills/local-task-planning` — creates and maintains right-sized
+  Markdown tasks with optional feature links.
+- `.agents/skills/release-candidate` — records only final, audience-relevant
+  changes as mutable changelog input.
+- `.agents/skills/task-system-upgrade` — compares a project's installed task
+  system with a pinned TaskLens template revision while preserving local rules.
 
 Keep project-specific coding, testing, and release instructions in the
 project's own agent files; the starter kit only governs shared task tracking.
+This template is also TaskLens's single canonical implementation. TaskLens's
+root `AGENTS.md`, `TASKS/README.md`, and `.agents/skills/` contain only
+project-specific overlays or discovery forwarders, so the shared workflow is
+not maintained twice. The neighboring workspace is not required for new
+TaskLens work.
 
 ## Release and npm publishing
 
@@ -97,8 +108,8 @@ them. Then release a new version from a clean, validated branch:
 ```sh
 # Update package.json and bun.lock as needed, then commit the release change.
 bun run check:release
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 The tag starts the workflow; it does not run for ordinary branch pushes. npm
@@ -113,6 +124,11 @@ Consumers can install the released CLI with:
 bun add -g tasklens
 tasklens
 ```
+
+Starting TaskLens with `tasklens` or `tasklens <directory>` opens the discovered
+local project first and also restores projects previously added from the Overview.
+Use repeated `--backlog <name=dir>` options for an isolated one-off workspace, or
+`--empty` to start without any configured project.
 
 ### Native desktop releases
 
@@ -164,6 +180,7 @@ Area: web/app/editor
 Parent: 0031-rework-the-editor-shell
 Depends on: none
 References: references/0042-research.md
+Features: example:offline-drafts
 
 ## Context
 ...
@@ -181,6 +198,17 @@ References: references/0042-research.md
 
 Nothing here is mandatory. A file missing a field still parses; anything that
 had to fall back is reported at startup rather than silently absorbed.
+
+`Features:` is optional and accepts comma-separated stable Product Feature ids.
+It adds feature navigation and grouping but does not turn the task into a
+release note. Projects that do not maintain features need no migration.
+
+A completed task is also not automatically changelog material. The included
+`release-candidate` skill reviews the final effect and maintains concise,
+source-owned entries in `release-notes/unreleased.yaml` only for changes that
+matter to users, operators, or client developers. These candidates are mutable
+inputs: release preparation still owns final selection, deduplication, and
+public wording.
 
 ### What it does with the messy parts
 
@@ -236,6 +264,18 @@ with open dependants outranks a finished one.
 `CONTENDED` section: files that two or more **operational** tasks are all
 pointing at. A finished or wishlist task naming a file is history or planning; several active ones
 naming the same file is a collision worth knowing about before you start.
+
+**Features** — tasks grouped by their optional `Features:` ids. One task may
+appear under several features. This is a derived task view; TaskLens does not
+require or invent a feature catalog when a project has none.
+
+**Unreleased** — existing source-owned change candidates discovered in
+`release-notes/unreleased.yaml` files below the configured project. Candidate
+task numbers link back to task detail, and an optional future `features` list is
+shown when present. A confirmed Remove action deletes exactly that candidate
+from its source file so it cannot be selected for a later release. Task files
+remain read-only, and the view does not publish a changelog; projects without
+candidate files get a normal empty state.
 
 **Task detail** — the rendered sections, the subtask list with each child's real
 status, the full note history, and a rail carrying relations, the files the task

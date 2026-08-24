@@ -135,6 +135,12 @@ function parseReferences(raw: string): Reference[] {
   return out;
 }
 
+function parseList(raw: string): string[] {
+  const value = raw.trim();
+  if (!value || /^none$/i.test(value)) return [];
+  return [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))];
+}
+
 function parseSubtasks(body: string): Subtask[] {
   const out: Subtask[] = [];
   for (const line of body.split("\n")) {
@@ -419,6 +425,7 @@ export function parseTask(input: ParseInput): ParseResult {
     area,
     areas: area ? area.split(",").map((a) => a.trim()).filter(Boolean) : [],
     areaPaths: [],
+    features: parseList(fields["features"] ?? ""),
     fileRefs: parseFileRefs(text),
     files: [],
     parent: taskNumbers(fields["parent"] ?? "")[0] ?? null,

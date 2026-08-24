@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local-tasklens-app-commands",
+  "description": "Allow the TaskLens localhost UI to invoke its native app command without exposing core or plugin APIs.",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:7532/*"]
+  },
+  "permissions": ["allow-update-tray-active-count"]
+}

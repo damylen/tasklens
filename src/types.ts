@@ -64,6 +64,9 @@ export interface Task {
    */
   areaPaths: string[];
 
+  /** Optional stable Product Feature ids named by the task. */
+  features: string[];
+
   /** Source files named in the document, normalized but not yet folded. */
   fileRefs: string[];
   /**
@@ -103,6 +106,19 @@ export interface Warning {
   field: string;
   value: string;
   message: string;
+}
+
+export interface ChangeCandidate {
+  /** Source-local candidate id; `source` disambiguates equal ids across repos. */
+  id: string;
+  date: string;
+  type: string;
+  summary: string;
+  details: string;
+  tasks: string[];
+  features: string[];
+  /** Path relative to the configured project root. */
+  source: string;
 }
 
 export interface Meta {

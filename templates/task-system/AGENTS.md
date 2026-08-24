@@ -20,6 +20,9 @@ of truth for active work across humans and coding agents.
   information in dated Agent Notes. Append; do not rewrite earlier notes.
 - Keep the task's status honest: `wishlist` for uncommitted ideas; `open`,
   `in_progress`, `blocked`, or `done` for planned and active work.
+- Add `Features:` only when the project already uses stable Product Feature
+  ids and the task materially contributes to one. Small improvements normally
+  extend an existing feature; do not create a new feature for every task.
 - Use the included `task-system-upgrade` skill to compare this shared system with its canonical
   TaskLens GitHub template before updating an existing project. Keep project-specific rules and
   existing task files intact.
@@ -30,8 +33,12 @@ of truth for active work across humans and coding agents.
 
 1. Run the relevant validation and record the result, including any check that
    could not run or failed for a reason outside the change.
-2. Set `Status: done` only after the requested work is genuinely complete.
-3. Append a concise final Agent Note with what changed, what was verified, and
+2. Review the final effect for release relevance. When it matters to users,
+   operators, or client developers, use the included `release-candidate` skill
+   to add or update a concise candidate in the owning repository. A completed
+   task is not automatically a changelog candidate.
+3. Set `Status: done` only after the requested work is genuinely complete.
+4. Append a concise final Agent Note with what changed, what was verified, and
    the files touched. Include a commit hash when one exists.
 
 TaskLens only reads this backlog; it never writes task files for you.

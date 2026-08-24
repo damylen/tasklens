@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { discoverTaskDirs, WorkspaceStore } from "../src/workspace.ts";
@@ -60,6 +60,42 @@ describe("workspace store", () => {
     expect(response.status).toBe(201);
     expect(workspace.get("beta")!.get("0001")!.status).toBe("in_progress");
     expect((await loadBacklogs(configPath)).map((backlog) => backlog.id)).toEqual(["alpha", "beta"]);
+    workspace.close();
+  });
+
+  test("removes one unreleased candidate through the local API and refreshes the snapshot", async () => {
+    const alpha = await backlog("Alpha", "open");
+    const notes = join(alpha, "release-notes");
+    const file = join(notes, "unreleased.yaml");
+    await mkdir(notes, { recursive: true });
+    await writeFile(file, `schemaVersion: 1
+changes:
+  - id: remove-me
+    date: 2026-08-23
+    type: feature
+    summary: Remove this candidate.
+    tasks: [1]
+  - id: keep-me
+    date: 2026-08-23
+    type: fix
+    summary: Keep this candidate.
+    tasks: [1]
+`);
+    const workspace = new WorkspaceStore([{ id: "alpha", label: "Alpha", dir: alpha }]);
+    await workspace.scan();
+    const app = createApp(workspace);
+
+    const response = await app.request("http://tasklens.local/api/backlogs/alpha/changes", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: "release-notes/unreleased.yaml", id: "remove-me" }),
+    });
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as { backlogs: Array<{ changes: Array<{ id: string }> }> };
+    expect(payload.backlogs[0]!.changes.map((change) => change.id)).toEqual(["keep-me"]);
+    expect(await readFile(file, "utf8")).not.toContain("remove-me");
+    expect(workspace.list()[0]!.changes.map((change) => change.id)).toEqual(["keep-me"]);
     workspace.close();
   });
 

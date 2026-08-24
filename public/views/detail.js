@@ -263,6 +263,23 @@ function referencePanel(task, ctx) {
   );
 }
 
+function featurePanel(task, ctx) {
+  if (!task.features?.length) return null;
+
+  return el("div.panel", { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+    el("div", { style: { display: "flex", alignItems: "baseline", gap: "8px" } },
+      el("span.sec-name", null, "FEATURES"),
+      el("span.sec-hint", null, String(task.features.length)),
+    ),
+    el("div.feature-tags", null,
+      task.features.map((feature) => el("button.feature-tag", {
+        title: `Show tasks linked to ${feature}`,
+        onclick: () => ctx.goFeature(feature),
+      }, feature)),
+    ),
+  );
+}
+
 /**
  * Files the task's own text names. Each one routes into the Files view opened
  * on that file, which is where the other tasks touching it are listed.
@@ -386,6 +403,7 @@ export function renderDetail(task, ctx) {
         notesHost,
       ),
       el("div.detail-rail", null,
+        featurePanel(task, ctx),
         relationPanel(task, ctx),
         filePanel(task, ctx),
         referencePanel(task, ctx),

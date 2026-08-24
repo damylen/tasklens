@@ -105,6 +105,20 @@ describe("relations", () => {
   });
 });
 
+describe("features", () => {
+  // Feature metadata is optional: old and small backlogs must remain valid,
+  // while richer projects can link one task to several stable capabilities.
+  test("reads unique comma-separated feature ids", () => {
+    const { task } = build(header("Features: osmentis:map-basemaps, tasklens:feature-lifecycle, osmentis:map-basemaps"));
+    expect(task.features).toEqual(["osmentis:map-basemaps", "tasklens:feature-lifecycle"]);
+  });
+
+  test("treats missing and explicit none as no feature links", () => {
+    expect(build(header()).task.features).toEqual([]);
+    expect(build(header("Features: none")).task.features).toEqual([]);
+  });
+});
+
 describe("subtasks", () => {
   // Both list styles occur. The checkbox is advisory: the child file's own
   // Status is the truth, so the checkbox is recorded but never trusted here.

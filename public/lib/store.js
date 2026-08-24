@@ -30,6 +30,13 @@ export class ClientStore {
     return [...this.tasks.values()].sort((a, b) => a.num - b.num || a.id.localeCompare(b.id));
   }
 
+  /** Tasks from every mounted backlog, for application-wide signals. */
+  listAll() {
+    return [...this.backlogs.values()]
+      .flatMap((backlog) => [...backlog.tasks.values()])
+      .sort((a, b) => a.num - b.num || a.id.localeCompare(b.id));
+  }
+
   /** Accepts an id, or a bare number when it is unambiguous. */
   get(key) {
     const direct = this.tasks.get(key);
@@ -95,6 +102,27 @@ export class ClientStore {
       this.backlogs.set(backlog.id, { ...backlog, tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])) });
     }
     this.emit("add");
+    return backlogs;
+  }
+
+  async removeChange(change) {
+    if (!this.activeBacklog) throw new Error("no active backlog");
+    const response = await fetch(`/api/backlogs/${encodeURIComponent(this.activeBacklog)}/changes`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ source: change.source, id: change.id }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || `could not remove candidate (${response.status})`);
+    const backlogs = payload.backlogs || [];
+    for (const backlog of backlogs) {
+      this.backlogs.set(backlog.id, {
+        ...backlog,
+        tasks: new Map((backlog.tasks || []).map((task) => [task.id, task])),
+      });
+    }
+    this.select(this.activeBacklog, false);
+    this.emit("remove-change");
     return backlogs;
   }
 

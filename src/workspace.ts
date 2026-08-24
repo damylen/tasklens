@@ -4,13 +4,25 @@ import type { Change } from "./store.ts";
 import { TaskStore } from "./store.ts";
 import type { BacklogConfig } from "./config.ts";
 import type { Meta } from "./types.ts";
+import type { ChangeCandidate } from "./types.ts";
+import { discoverReleaseCandidates, removeReleaseCandidate } from "./releases.ts";
 
 const TASK_FILE = /^\d{4,}[-_].*\.md$/;
 const SKIP_DIRS = new Set([".git", ".hg", ".svn", "node_modules", "dist", "build", "coverage", ".next"]);
 
-export interface BacklogSnapshot extends BacklogConfig { meta: Meta; }
+export interface BacklogSnapshot extends BacklogConfig {
+  meta: Meta;
+  changes: ChangeCandidate[];
+  changeWarnings: string[];
+}
 type Listener = (backlog: BacklogSnapshot, change: Change) => void;
-type Entry = { config: BacklogConfig; store: TaskStore };
+type Entry = {
+  config: BacklogConfig;
+  configuredRoot: string;
+  store: TaskStore;
+  changes: ChangeCandidate[];
+  changeWarnings: string[];
+};
 
 /** Discovers task directories once; only the directories found here are watched. */
 export async function discoverTaskDirs(root: string): Promise<string[]> {
@@ -57,6 +69,7 @@ export class WorkspaceStore {
   private async mount(config: BacklogConfig): Promise<BacklogSnapshot[]> {
     const dirs = await discoverTaskDirs(config.dir);
     if (!dirs.length) throw new Error(`no task files found under ${config.dir}`);
+    const release = await discoverReleaseCandidates(config.dir);
     const snapshots: BacklogSnapshot[] = [];
     const multiple = dirs.length > 1;
     for (const dir of dirs) {
@@ -66,7 +79,13 @@ export class WorkspaceStore {
       const source = { id, label: suffix ? `${config.label} · ${suffix}` : config.label, dir };
       const store = new TaskStore(dir);
       await store.scan();
-      this.stores.set(id, { config: source, store });
+      this.stores.set(id, {
+        config: source,
+        configuredRoot: config.dir,
+        store,
+        changes: release.changes,
+        changeWarnings: release.warnings,
+      });
       if (this.watching) this.attach(source, store);
       snapshots.push(this.snapshot(id)!);
     }
@@ -94,7 +113,12 @@ export class WorkspaceStore {
 
   snapshot(id: string): BacklogSnapshot | undefined {
     const entry = this.stores.get(id);
-    return entry && { ...entry.config, meta: entry.store.meta() };
+    return entry && {
+      ...entry.config,
+      meta: entry.store.meta(),
+      changes: entry.changes,
+      changeWarnings: entry.changeWarnings,
+    };
   }
 
   list(): BacklogSnapshot[] {
@@ -102,6 +126,22 @@ export class WorkspaceStore {
       const backlog = this.snapshot(id);
       return backlog ? [backlog] : [];
     });
+  }
+
+  async removeChange(backlogId: string, source: string, id: string): Promise<BacklogSnapshot[]> {
+    const owner = this.stores.get(backlogId);
+    if (!owner) throw new Error("backlog not found");
+    await removeReleaseCandidate(owner.configuredRoot, source, id);
+    const release = await discoverReleaseCandidates(owner.configuredRoot);
+    const updated: BacklogSnapshot[] = [];
+    for (const [candidateId, entry] of this.stores) {
+      if (resolve(entry.configuredRoot) !== resolve(owner.configuredRoot)) continue;
+      entry.changes = release.changes;
+      entry.changeWarnings = release.warnings;
+      const snapshot = this.snapshot(candidateId);
+      if (snapshot) updated.push(snapshot);
+    }
+    return updated;
   }
 
   get(id: string): TaskStore | undefined { return this.stores.get(id)?.store; }

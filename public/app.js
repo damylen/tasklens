@@ -1,21 +1,29 @@
 import { el, clear, svg, ICON } from "./lib/dom.js";
+import { normalizePriorities, priorityMatches, togglePriority } from "./lib/filters.js";
 import { num } from "./lib/format.js";
+import { isTypingTarget, resolveShortcut } from "./lib/shortcuts.js";
 import { ClientStore } from "./lib/store.js";
+import { activeWorkCount } from "./lib/activity.js";
 import { createStore } from "./lib/persist.js";
 import { allViews, defaultViewId, getView } from "./lib/registry.js";
 import { renderDetail, detailCrumb, resetDetailState } from "./views/detail.js";
-import { renderOverview } from "./views/overview.js";
+import {
+  captureAddBacklogFocus,
+  renderOverview,
+  restoreAddBacklogFocus,
+} from "./views/overview.js";
 import "./views/index.js";
 
 const store = new ClientStore();
 const root = document.getElementById("app");
 
-const filters = { q: "", priority: "all", area: "", since: 0, hideDone: false, hideWishlist: false };
+const filters = { q: "", priorities: [], area: "", since: 0, hideDone: false, hideWishlist: false };
 
 /** One namespaced store shared by the chrome and every view. */
 let persist = null;
 let detailOpen = true;
 let lastView = null;
+let overviewActiveOnly = false;
 
 function ensurePersist() {
   const root = store.meta?.root || "";
@@ -32,6 +40,7 @@ function saveFilters() {
   persist?.store.write("chrome.filters", {
     hideDone: filters.hideDone,
     hideWishlist: filters.hideWishlist,
+    priorities: filters.priorities,
     area: filters.area,
     since: filters.since,
   });
@@ -52,6 +61,7 @@ function restoreState(tasks) {
   const store_ = ensurePersist();
   filters.hideDone = false;
   filters.hideWishlist = false;
+  filters.priorities = [];
   filters.area = "";
   filters.since = 0;
 
@@ -59,6 +69,7 @@ function restoreState(tasks) {
   if (saved && typeof saved === "object") {
     filters.hideDone = saved.hideDone === true;
     filters.hideWishlist = saved.hideWishlist === true;
+    filters.priorities = normalizePriorities(saved.priorities ?? saved.priority);
     if (SINCE_WINDOWS.some(([window]) => window === saved.since)) filters.since = saved.since;
     if (typeof saved.area === "string" && saved.area) {
       const known = new Set();
@@ -129,6 +140,18 @@ function navigate(hash) {
   else location.hash = hash;
 }
 
+function openOverview(activeOnly = false) {
+  overviewActiveOnly = activeOnly;
+  navigate("#/overview");
+}
+
+function toggleOverviewActive() {
+  overviewActiveOnly = route.kind === "overview" ? !overviewActiveOnly : true;
+  showShortcutSwitch("A", overviewActiveOnly ? "ACTIVE ONLY" : "ALL ACTIVITY");
+  if (route.kind === "overview") render();
+  else navigate("#/overview");
+}
+
 function backlogHash(backlog, view = defaultViewId()) {
   return `#/b/${encodeURIComponent(backlog)}/${view}`;
 }
@@ -146,13 +169,13 @@ function buildContext() {
 
   areaMatches.pool = all;
   const match = (task) => {
-    if (filters.priority !== "all" && task.priority !== filters.priority) return false;
+    if (!priorityMatches(task.priority, filters.priorities)) return false;
     if (!areaMatches(task, filters.area)) return false;
     if (!sinceMatches(task, filters.since)) return false;
     if (filters.hideDone && task.status === "done") return false;
     if (filters.hideWishlist && task.status === "wishlist") return false;
     if (query) {
-      const hay = `${task.number} ${task.title} ${task.area} ${task.agent} ${task.id}`.toLowerCase();
+      const hay = `${task.number} ${task.title} ${task.area} ${task.agent} ${task.id} ${(task.features || []).join(" ")}`.toLowerCase();
       if (!hay.includes(query)) return false;
     }
     return true;
@@ -190,6 +213,9 @@ function buildContext() {
     },
     goFile(path) {
       navigate(`${backlogHash(store.activeBacklog, "files")}/${encodeURIComponent(path)}`);
+    },
+    goFeature(id) {
+      navigate(`${backlogHash(store.activeBacklog, "features")}/${encodeURIComponent(id)}`);
     },
     openTask(id) {
       navigate(`#/b/${encodeURIComponent(store.activeBacklog)}/task/${encodeURIComponent(id)}`);
@@ -231,14 +257,10 @@ function sinceMatches(task, window) {
   return task.mtime >= Date.now() - window;
 }
 
-/**
- * A task is actively worked on when its explicit status says so and its source
- * file changed during the current hour. This deliberately reads the whole store
- * rather than the filtered view: the toolbar is an operational signal, not a
- * summary of whichever slice happens to be open.
- */
-function activeWorkCount(tasks, now = Date.now()) {
-  return tasks.filter((task) => task.status === "in_progress" && task.mtime >= now - HOUR).length;
+function updateTrayBadge(tasks) {
+  const invoke = globalThis.__TAURI_INTERNALS__?.invoke;
+  if (typeof invoke !== "function") return;
+  invoke("update_tray_active_count", { count: activeWorkCount(tasks) }).catch(() => {});
 }
 
 const AREA_CHIP_LIMIT = 6;
@@ -283,26 +305,14 @@ function areaMatches(task, selected) {
   return task.areaPaths.some((path) => path === selected || path.startsWith(selected + "/"));
 }
 
-function chips(label, options, current, onPick) {
-  return [
-    el("span.rail-label", null, label),
-    el("div.chips", null,
-      options.map(([value, text]) =>
-        el("button.chip.tiny" + (current === value ? ".on" : ""), {
-          onclick: () => onPick(value),
-        }, text),
-      ),
-    ),
-  ];
-}
-
 function topBar(ctx, view) {
   const meta = store.meta;
   const isTask = route.kind === "task";
   const task = isTask ? store.get(route.key) : null;
+  const backlogs = store.listBacklogs();
 
   const bar = el("div.bar", null,
-    el("div.brand", { title: "workspace overview", onclick: () => navigate("#/overview") },
+    el("div.brand", { title: "workspace overview", onclick: () => openOverview(false) },
       svg([
         "M12 5a7 7 0 100 14 7 7 0 000-14z",
         "M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3",
@@ -311,9 +321,19 @@ function topBar(ctx, view) {
     ),
   );
 
+  const selectBacklogFromToolbar = (event) => {
+    const id = event.target.value;
+    if (id === "overview") {
+      openOverview(false);
+      return;
+    }
+    selectBacklog(id);
+    navigate(backlogHash(id, lastView || defaultViewId()));
+  };
+
   bar.append(el("div.backlog-tabs", null,
-    el("button.backlog-tab" + (route.kind === "overview" ? ".on" : ""), { onclick: () => navigate("#/overview") }, "OVERVIEW"),
-    store.listBacklogs().map((backlog) =>
+    el("button.backlog-tab" + (route.kind === "overview" ? ".on" : ""), { onclick: () => openOverview(false) }, "OVERVIEW"),
+    backlogs.map((backlog) =>
       el("button.backlog-tab" + (backlog.id === store.activeBacklog && route.kind !== "overview" ? ".on" : ""), {
         title: backlog.dir,
         onclick: () => {
@@ -323,17 +343,21 @@ function topBar(ctx, view) {
       }, backlog.label),
     ),
   ));
+  bar.append(el("select.toolbar-select.backlog-select", {
+    "aria-label": "Select project",
+    onchange: selectBacklogFromToolbar,
+  },
+    el("option", { value: "overview", selected: route.kind === "overview" }, "Overview"),
+    backlogs.map((backlog) => el("option", {
+      value: backlog.id,
+      selected: route.kind !== "overview" && backlog.id === store.activeBacklog,
+    }, backlog.label)),
+  ));
 
   if (isTask && task) {
     bar.append(detailCrumb(task, ctx));
   } else if (route.kind !== "overview") {
     bar.append(
-      el("div.rootpath", { title: meta?.root || "" },
-        el("span", null, meta?.root || "…"),
-        el("span", { class: "live " + (store.connected ? "on" : "off") }),
-        el("span", { class: "live-label" + (store.connected ? "" : " off") },
-          store.connected ? "WATCHING" : "OFFLINE"),
-      ),
       el("div.seg", null,
         allViews().map((v) =>
           el("button.seg-item" + (v.id === view?.id ? ".on" : ""), {
@@ -341,6 +365,13 @@ function topBar(ctx, view) {
           }, v.label),
         ),
       ),
+      el("select.toolbar-select.view-select", {
+        "aria-label": "Select view",
+        onchange: (event) => navigate(backlogHash(store.activeBacklog, event.target.value)),
+      }, allViews().map((v) => el("option", {
+        value: v.id,
+        selected: v.id === view?.id,
+      }, v.label))),
     );
   }
 
@@ -357,6 +388,13 @@ function topBar(ctx, view) {
             }, label),
           ),
         ),
+        el("select.toolbar-select.since-select", {
+          "aria-label": "Filter by touched time",
+          onchange: (event) => ctx.setFilter("since", Number(event.target.value)),
+        }, SINCE_WINDOWS.map(([window, label]) => el("option", {
+          value: String(window),
+          selected: window === filters.since,
+        }, label))),
       ),
     );
   }
@@ -378,9 +416,11 @@ function topBar(ctx, view) {
   if (meta && route.kind !== "overview") {
     const activeWork = activeWorkCount(ctx.allTasks);
     bar.append(
-      el("div.active-work", {
-        title: `${activeWork} in-progress task${activeWork === 1 ? "" : "s"} touched in the last hour`,
+      el("button.active-work", {
+        type: "button",
+        title: `${activeWork} in-progress task${activeWork === 1 ? "" : "s"} touched in the last hour · show in Overview`,
         "aria-label": `${activeWork} in-progress tasks touched in the last hour`,
+        onclick: toggleOverviewActive,
       },
         el("span.active-work-dot"),
         el("span.active-work-count", null, num(activeWork)),
@@ -394,6 +434,13 @@ function topBar(ctx, view) {
       ),
     );
   }
+
+  bar.append(el("button.toolbar-info", {
+    type: "button",
+    title: "About TaskLens and keyboard shortcuts",
+    "aria-label": "TaskLens information and shortcuts",
+    onclick: showInfoDialog,
+  }, svg(ICON.info, { size: 16, stroke: "currentColor", width: 1.7 })));
 
   return bar;
 }
@@ -449,9 +496,20 @@ function filterRail(ctx, view) {
   const rail = el("div.rail");
 
   if (wanted.includes("priority")) {
-    rail.append(...chips("PRIORITY", [
+    const priorities = [
       ["all", "ALL"], ["critical", "CRITICAL"], ["high", "HIGH"], ["medium", "MEDIUM"], ["low", "LOW"],
-    ], filters.priority, (v) => ctx.setFilter("priority", v)));
+    ];
+    rail.append(
+      el("span.rail-label", null, "PRIORITY"),
+      el("div.chips.priority-chips", null, priorities.map(([value, label]) => {
+        const selected = value === "all" ? filters.priorities.length === 0 : filters.priorities.includes(value);
+        return el("button.chip.tiny" + (selected ? ".on" : ""), {
+          title: value === "all" ? "show every priority" : `toggle ${label.toLowerCase()} priority`,
+          "aria-pressed": String(selected),
+          onclick: () => ctx.setFilter("priorities", togglePriority(filters.priorities, value)),
+        }, label);
+      })),
+    );
   }
 
   if (wanted.includes("status")) {
@@ -504,13 +562,19 @@ function detailStrip(ctx, view) {
 /* ── render ──────────────────────────────────────────────── */
 
 function render(options = {}) {
+  updateTrayBadge(store.listAll());
   if (route.kind === "overview") {
+    const formFocus = captureAddBacklogFocus(root);
     clear(root);
     root.append(topBar({ allTasks: [], meta: null }, null));
     root.append(renderOverview(store.listBacklogs(), (backlog, view) => {
       selectBacklog(backlog);
       navigate(backlogHash(backlog, view));
-    }, (label, dir) => store.addBacklog(label, dir)));
+    }, (label, dir) => store.addBacklog(label, dir), render, undefined, {
+      activeOnly: overviewActiveOnly,
+      toggleActive: toggleOverviewActive,
+    }));
+    restoreAddBacklogFocus(root, formFocus);
     return;
   }
 
@@ -580,6 +644,112 @@ function flash(message) {
   toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
 }
 
+const shortcutSwitchKey = el("div.shortcut-switch-key");
+const shortcutSwitchLabel = el("div.shortcut-switch-label");
+const shortcutSwitch = el("div.shortcut-switch", { "aria-live": "polite" },
+  el("div.shortcut-switch-card", null, shortcutSwitchKey, shortcutSwitchLabel),
+);
+document.body.append(shortcutSwitch);
+let shortcutSwitchTimer = null;
+
+function showShortcutSwitch(key, label) {
+  shortcutSwitchKey.textContent = key;
+  shortcutSwitchLabel.textContent = label;
+  shortcutSwitch.classList.remove("show");
+  // Restart the entrance animation when shortcuts are used in quick succession.
+  void shortcutSwitch.offsetWidth;
+  shortcutSwitch.classList.add("show");
+  clearTimeout(shortcutSwitchTimer);
+  shortcutSwitchTimer = setTimeout(() => shortcutSwitch.classList.remove("show"), 1050);
+}
+
+window.addEventListener("keydown", (event) => {
+  if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (infoDialog.open) return;
+  if (isTypingTarget(event.target)) return;
+
+  const action = resolveShortcut(event.key, store.listBacklogs());
+  if (!action) return;
+
+  if (action.type === "search") {
+    if (!searchInput?.isConnected) return;
+    event.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+    showShortcutSwitch(action.key, "SEARCH");
+    return;
+  }
+
+  event.preventDefault();
+  if (action.type === "overview") {
+    overviewActiveOnly = false;
+    showShortcutSwitch(action.key, "OVERVIEW");
+    navigate("#/overview");
+    return;
+  }
+  if (action.type === "active") {
+    toggleOverviewActive();
+    return;
+  }
+  if (action.type === "toggleDone") {
+    if (route.kind !== "view") return;
+    filters.hideDone = !filters.hideDone;
+    saveFilters();
+    render();
+    showShortcutSwitch(action.key, filters.hideDone ? "DONE HIDDEN" : "DONE VISIBLE");
+    return;
+  }
+  if (action.type === "project") {
+    selectBacklog(action.backlog.id);
+    showShortcutSwitch(action.key, `PROJECT · ${action.backlog.label}`);
+    navigate(backlogHash(action.backlog.id, lastView || defaultViewId()));
+    return;
+  }
+  if (action.type === "view" && store.activeBacklog) {
+    const selectedView = getView(action.id);
+    showShortcutSwitch(action.key, selectedView?.label?.toUpperCase() || action.id.toUpperCase());
+    navigate(backlogHash(store.activeBacklog, action.id));
+  }
+});
+
+const shortcutRows = [
+  ["1–9", "Select project in displayed order"],
+  ["T", "Timeline"], ["K", "Kanban"], ["G", "Groups"],
+  ["F", "Files"], ["U", "Unreleased"], ["O", "Overview"],
+  ["A", "Toggle active-only Overview"], ["D", "Toggle done tasks"], ["/", "Focus search"],
+];
+const infoDialog = el("dialog.tasklens-info", {
+  onclick: (event) => { if (event.target === infoDialog) infoDialog.close(); },
+},
+  el("div.info-head", null,
+    el("div", null,
+      el("div.info-kicker", null, "TASKLENS GUIDE"),
+      el("h2", null, "Navigate the work, not the filesystem"),
+    ),
+    el("button.info-close", { type: "button", "aria-label": "Close information", onclick: () => infoDialog.close() }, "×"),
+  ),
+  el("p.info-intro", null, "TaskLens turns repository-owned Markdown tasks into a live workspace. Projects stay isolated; views, filters, notes, relationships, and release candidates are read from their source files."),
+  el("div.info-grid", null,
+    el("section", null,
+      el("h3", null, "How to use it"),
+      el("p", null, "Choose a project, then switch between Timeline, Kanban, Groups, Files, Features, and Unreleased. Filters combine: selecting several priorities shows tasks matching any selected priority."),
+      el("p", null, "ALL clears the priority selection. Done and Wishlist visibility apply across views; area chips drill into the task paths detected in the backlog."),
+    ),
+    el("section", null,
+      el("h3", null, "Keyboard shortcuts"),
+      el("div.shortcut-guide", null, shortcutRows.map(([key, description]) =>
+        el("div.shortcut-guide-row", null, el("kbd", null, key), el("span", null, description)),
+      )),
+    ),
+  ),
+  el("div.info-foot", null, "Press Escape or click outside this panel to close."),
+);
+document.body.append(infoDialog);
+
+function showInfoDialog() {
+  if (!infoDialog.open) infoDialog.showModal();
+}
+
 /* ── boot ────────────────────────────────────────────────── */
 
 store.subscribe((reason) => {
@@ -610,3 +780,5 @@ store.load()
       el("div.small", null, String(error.message || error)),
     ));
   });
+
+setInterval(() => updateTrayBadge(store.listAll()), 60_000);

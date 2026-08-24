@@ -43,6 +43,23 @@ export function createApp(workspace: WorkspaceStore, { configPath = defaultConfi
     }
   });
 
+  app.delete("/api/backlogs/:backlog/changes", async (c) => {
+    let body: { source?: unknown; id?: unknown };
+    try { body = await c.req.json(); } catch { return c.json({ error: "expected JSON body" }, 400); }
+    const source = typeof body.source === "string" ? body.source.trim() : "";
+    const id = typeof body.id === "string" ? body.id.trim() : "";
+    if (!source || !id) return c.json({ error: "candidate source and id are required" }, 400);
+    try {
+      const snapshots = await workspace.removeChange(c.req.param("backlog"), source, id);
+      return c.json({ backlogs: snapshots.map((snapshot) => ({
+        ...snapshot, tasks: workspace.get(snapshot.id)?.list() ?? [],
+      })) });
+    } catch (error) {
+      const message = (error as Error).message || "could not remove candidate";
+      return c.json({ error: message }, message === "backlog not found" ? 404 : 400);
+    }
+  });
+
   app.get("/api/backlogs/:backlog/tasks/:key", (c) => {
     const store = workspace.get(c.req.param("backlog"));
     if (!store) return c.json({ error: "backlog not found" }, 404);

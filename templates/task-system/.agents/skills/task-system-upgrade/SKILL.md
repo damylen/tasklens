@@ -13,11 +13,14 @@ commit instead of `main` when the user needs a reproducible version.
 ## Boundaries
 
 - The canonical template owns its shared files: `AGENTS.md`, `CLAUDE.md`,
-  `.github/copilot-instructions.md`, `TASKS/README.md`, and this skill.
+  `.github/copilot-instructions.md`, `TASKS/README.md`, and the skills under
+  `.agents/skills/`.
 - The project owns its task files (`TASKS/NNNN-*.md`, `TASKS/references/`) and project-specific
   instructions. Never replace, delete, or reformat those as an upgrade side effect.
 - `wishlist` means an uncommitted idea. Keep it visible, but never treat it as active, blocked, or
   committed work; changing it to `open` is an explicit planning decision.
+- Preserve whether the project uses optional Product Features and release
+  candidates. Installing support does not require creating either kind of data.
 
 ## Workflow
 

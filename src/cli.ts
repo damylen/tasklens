@@ -1,10 +1,10 @@
 import { existsSync, statSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { addBacklog, loadBacklogs, removeBacklog } from "./config.ts";
+import { addBacklog, loadBacklogs, removeBacklog, type BacklogConfig } from "./config.ts";
 import { createApp } from "./server.ts";
 import { WorkspaceStore } from "./workspace.ts";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const DEFAULT_PORT = 4321;
 
 interface Options {
@@ -178,6 +178,27 @@ async function manageBacklogs(options: Options): Promise<void> {
   throw new Error("usage: tasklens backlog <add|list|remove>");
 }
 
+/**
+ * A directory invocation opens that project first, while retaining projects
+ * added from the Overview in the same local configuration used by `serve`.
+ */
+export async function restoreSavedBacklogs(
+  primary: BacklogConfig[],
+  configPath?: string,
+): Promise<BacklogConfig[]> {
+  const merged: BacklogConfig[] = [];
+  const ids = new Set<string>();
+  const dirs = new Set<string>();
+  for (const backlog of [...primary, ...await loadBacklogs(configPath)]) {
+    const dir = resolve(backlog.dir);
+    if (ids.has(backlog.id) || dirs.has(dir)) continue;
+    ids.add(backlog.id);
+    dirs.add(dir);
+    merged.push({ ...backlog, dir });
+  }
+  return merged;
+}
+
 export async function main(argv = Bun.argv.slice(2)): Promise<void> {
   const options = parseArgs(argv);
 
@@ -199,7 +220,8 @@ export async function main(argv = Bun.argv.slice(2)): Promise<void> {
       console.error(`           create one, or point at it: tasklens path/to/TASKS`);
       process.exit(1);
     }
-    backlogs = [{ id: "local", label: basename(dirname(root)) || "backlog", dir: root }];
+    const local = { id: "local", label: basename(dirname(root)) || "backlog", dir: root };
+    backlogs = options.command === "serve" ? [local] : await restoreSavedBacklogs([local]);
   }
   if (backlogs.some((backlog) => !backlog.id || !backlog.dir)) {
     console.error("tasklens: every --backlog value needs name=directory with a TASKS/ folder");
