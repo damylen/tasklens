@@ -13,6 +13,28 @@ cd ~/work/your-repo
 tasklens
 ```
 
+## Screenshots
+
+The Timeline groups activity by day and task, with recency, area, priority, and
+activity filters always within reach.
+
+![TaskLens Timeline showing recent notes grouped by task](docs/images/tasklens-timeline.png)
+
+Filters narrow the workspace without losing the surrounding navigation and
+activity context.
+
+![TaskLens Timeline filtered to release work](docs/images/tasklens-timeline-filtered.png)
+
+Task detail keeps the Markdown context, acceptance criteria, notes, relations,
+and touched files together in one view.
+
+![TaskLens task detail showing acceptance criteria, activity, relations, and files](docs/images/tasklens-task-detail.png)
+
+The built-in guide keeps project navigation, view shortcuts, search, and
+visibility controls discoverable.
+
+![TaskLens keyboard shortcuts guide](docs/images/tasklens-keyboard-guide.png)
+
 ## Watch several backlogs together
 
 Save each backlog once under a short, local name, then start a workspace:
