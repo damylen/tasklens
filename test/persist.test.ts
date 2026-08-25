@@ -67,3 +67,14 @@ describe("persisted view state", () => {
     expect(store.read("missing", "fallback")).toBe("fallback");
   });
 });
+
+test("timeline collapse state stays scoped to its project", () => {
+  const backing = fakeStorage();
+  const alpha = createStore("/work/alpha/TASKS", backing);
+  const beta = createStore("/work/beta/TASKS", backing);
+
+  alpha.write("timeline.collapsed", ["2026-08-24:0001-a"]);
+
+  expect(alpha.read("timeline.collapsed", [])).toEqual(["2026-08-24:0001-a"]);
+  expect(beta.read("timeline.collapsed", [])).toEqual([]);
+});

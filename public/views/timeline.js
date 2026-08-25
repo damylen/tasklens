@@ -1,6 +1,7 @@
-import { el } from "../lib/dom.js";
+import { el, svg, ICON } from "../lib/dom.js";
 import { dayDate, dayLabel, daysAgo, num, statusLabel } from "../lib/format.js";
 import { areaLabel } from "../lib/area.js";
+import { groupTimelineNotes, timelineStateStore, updateCollapsedGroups } from "../lib/timeline.js";
 
 const SHOW_MODES = [
   ["all", "All activity"],
@@ -10,6 +11,23 @@ const SHOW_MODES = [
 
 let show = "all";
 let limit = 400;
+let collapsed = new Set();
+let persisted = null;
+
+function ensureStore(ctx) {
+  const root = ctx.meta?.root || "";
+  persisted = { root, store: timelineStateStore(root, ctx.persist) };
+  const saved = persisted.store.read("timeline.collapsed", []);
+  collapsed = new Set(Array.isArray(saved) ? saved.filter((key) => typeof key === "string") : []);
+}
+
+function setGroupCollapsed(key, value, ctx) {
+  ensureStore(ctx);
+  if (value) collapsed.add(key);
+  else collapsed.delete(key);
+  persisted.store.write("timeline.collapsed", [...collapsed].sort());
+  ctx.rerender();
+}
 
 /**
  * A note is only evidence that something happened on a date. Whether that
@@ -24,38 +42,54 @@ function keep(entry) {
   return newest;
 }
 
-function entryNode(entry, ctx) {
-  const task = entry.task;
-  const colour = `var(--st-${task.status})`;
-  const newest = task.lastActivity === entry.date;
-
-  return el("div.entry", { onclick: () => ctx.openTask(task.id) },
-    el("div.entry-rail", null,
-      el("span.badge", {
-        style: newest
-          ? { color: colour, borderColor: colour, background: "transparent" }
-          : { color: "var(--faint)", borderColor: "var(--line)" },
-      }, newest ? statusLabel(task.status) : "NOTE"),
-    ),
+function noteNode(entry, task, ctx) {
+  return el("button.timeline-note", { onclick: () => ctx.openTask(task.id), title: `Open ${task.number} ${task.title}` },
+    el("div.timeline-note-rail", null),
     el("div.entry-spine", null,
-      el("i", {
-        style: newest
-          ? { background: colour, borderColor: colour }
-          : { background: "var(--bg)", borderColor: "#3d3a33" },
-      }),
+      el("i", { style: { background: "var(--bg)", borderColor: "var(--line)" } }),
       el("u"),
     ),
     el("div.entry-body", null,
-      el("div.entry-head", null,
-        el("span.entry-n", null, task.number),
-        el("span.entry-title", null, task.title),
-        areaLabel(task, ctx, { className: "entry-area" }),
-      ),
       el("div.entry-note", null, entry.text || "(no text)"),
       el("div.entry-foot", null,
         el("span.entry-agent", null, entry.agent || task.agent),
       ),
     ),
+  );
+}
+
+function taskGroupNode(group, date, ctx) {
+  const task = group.task;
+  const colour = `var(--st-${task.status})`;
+  const newest = task.lastActivity === date;
+  const open = !collapsed.has(group.key);
+  const bodyId = `timeline-${group.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+
+  return el("section.timeline-task", null,
+    el("div.timeline-task-head", null,
+      el("button.timeline-task-toggle" + (open ? "" : ".closed"), {
+        title: `${open ? "Collapse" : "Expand"} ${task.number} ${task.title}`,
+        "aria-label": `${open ? "Collapse" : "Expand"} task ${task.number}`,
+        "aria-expanded": open,
+        "aria-controls": bodyId,
+        onclick: () => setGroupCollapsed(group.key, open, ctx),
+      }, svg(ICON.chevronDown, { size: 13, stroke: "currentColor" })),
+      el("span.badge", {
+        style: newest
+          ? { color: colour, borderColor: colour, background: "transparent" }
+          : { color: "var(--faint)", borderColor: "var(--line)" },
+      }, newest ? statusLabel(task.status) : "NOTE"),
+      el("button.timeline-task-link", {
+        onclick: () => ctx.openTask(task.id),
+        title: `Open ${task.number} ${task.title}`,
+      },
+        el("span.entry-n", null, task.number),
+        el("span.entry-title", null, task.title),
+      ),
+      areaLabel(task, ctx, { className: "entry-area" }),
+      el("span.timeline-task-meta", null, `${num(group.notes.length)} note${group.notes.length === 1 ? "" : "s"}`),
+    ),
+    el("div.timeline-task-notes", { id: bodyId, hidden: !open }, group.notes.map((note) => noteNode(note, task, ctx))),
   );
 }
 
@@ -85,6 +119,7 @@ function sparkline(notes) {
 }
 
 function build(ctx) {
+  ensureStore(ctx);
   const notes = ctx.notes.filter(keep);
   const stream = el("div.stream");
   const inner = el("div.stream-in");
@@ -99,11 +134,7 @@ function build(ctx) {
   }
 
   const shown = notes.slice(0, limit);
-  const groups = new Map();
-  for (const note of shown) {
-    if (!groups.has(note.date)) groups.set(note.date, []);
-    groups.get(note.date).push(note);
-  }
+  const groups = groupTimelineNotes(shown);
 
   // Day totals come from the unfiltered set so the header count stays honest
   // about how much happened that day, not just how much survived the filter.
@@ -112,8 +143,9 @@ function build(ctx) {
     dayTotals.set(note.date, (dayTotals.get(note.date) || 0) + 1);
   }
 
-  for (const [date, entries] of groups) {
-    const tasks = new Set(entries.map((e) => e.task.id)).size;
+  for (const group of groups) {
+    const { date, tasks } = group;
+    const entries = tasks.flatMap((task) => task.notes);
     const total = dayTotals.get(date) || entries.length;
     const label = dayLabel(date);
 
@@ -124,9 +156,9 @@ function build(ctx) {
         el("span.day-date", null, dayDate(date)),
         el("div.day-rule"),
         el("span.day-meta", null,
-          `${num(entries.length)}${entries.length === total ? "" : ` of ${num(total)}`} notes · ${num(tasks)} tasks`),
+          `${num(entries.length)}${entries.length === total ? "" : ` of ${num(total)}`} notes · ${num(tasks.length)} tasks`),
       ),
-      ...entries.map((entry) => entryNode(entry, ctx)),
+      ...tasks.map((task) => taskGroupNode(task, date, ctx)),
     );
   }
 
@@ -153,6 +185,10 @@ export default {
   },
 
   toolbar(ctx) {
+    ensureStore(ctx);
+    const keys = groupTimelineNotes(ctx.notes.filter(keep).slice(0, limit))
+      .flatMap((day) => day.tasks.map((task) => task.key));
+    const allCollapsed = keys.length > 0 && keys.every((key) => collapsed.has(key));
     return el("div", { style: { display: "flex", alignItems: "center", gap: "14px" } },
       el("span.rail-label", null, "SHOW"),
       el("div.seg.tight", null,
@@ -162,6 +198,15 @@ export default {
           }, label),
         ),
       ),
+      el("div.rail-div"),
+      el("button.chip.tiny", {
+        disabled: keys.length === 0,
+        onclick: () => {
+          collapsed = updateCollapsedGroups(collapsed, keys, !allCollapsed);
+          persisted.store.write("timeline.collapsed", [...collapsed].sort());
+          ctx.rerender();
+        },
+      }, allCollapsed ? "EXPAND ALL" : "COLLAPSE ALL"),
     );
   },
 

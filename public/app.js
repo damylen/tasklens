@@ -312,7 +312,7 @@ function topBar(ctx, view) {
   const backlogs = store.listBacklogs();
 
   const bar = el("div.bar", null,
-    el("div.brand", { title: "workspace overview", onclick: () => openOverview(false) },
+    el("button.brand", { type: "button", title: "workspace overview", onclick: () => openOverview(false) },
       svg([
         "M12 5a7 7 0 100 14 7 7 0 000-14z",
         "M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3",
@@ -323,10 +323,7 @@ function topBar(ctx, view) {
 
   const selectBacklogFromToolbar = (event) => {
     const id = event.target.value;
-    if (id === "overview") {
-      openOverview(false);
-      return;
-    }
+    if (!id) return;
     selectBacklog(id);
     navigate(backlogHash(id, lastView || defaultViewId()));
   };
@@ -347,7 +344,7 @@ function topBar(ctx, view) {
     "aria-label": "Select project",
     onchange: selectBacklogFromToolbar,
   },
-    el("option", { value: "overview", selected: route.kind === "overview" }, "Overview"),
+    el("option", { value: "", disabled: true, selected: route.kind === "overview" }, "Select project…"),
     backlogs.map((backlog) => el("option", {
       value: backlog.id,
       selected: route.kind !== "overview" && backlog.id === store.activeBacklog,
@@ -567,9 +564,11 @@ function render(options = {}) {
     const formFocus = captureAddBacklogFocus(root);
     clear(root);
     root.append(topBar({ allTasks: [], meta: null }, null));
-    root.append(renderOverview(store.listBacklogs(), (backlog, view) => {
+    root.append(renderOverview(store.listBacklogs(), (backlog, view, taskId) => {
       selectBacklog(backlog);
-      navigate(backlogHash(backlog, view));
+      navigate(taskId
+        ? `#/b/${encodeURIComponent(backlog)}/task/${encodeURIComponent(taskId)}`
+        : backlogHash(backlog, view));
     }, (label, dir) => store.addBacklog(label, dir), render, undefined, {
       activeOnly: overviewActiveOnly,
       toggleActive: toggleOverviewActive,

@@ -1,3 +1,16 @@
 schemaVersion: 1
 
-changes: []
+changes:
+  - id: collapsible-timeline-task-groups
+    date: 2026-08-24
+    type: feature
+    summary: Group timeline notes by task and make each task group collapsible.
+    details: Timeline and Home keep their chronological day structure while repeated task activity is folded into accessible, project-persisted groups with individual and bulk disclosure controls.
+    tasks: [15]
+
+  - id: readable-activity-and-home-brand-navigation
+    date: 2026-08-24
+    type: change
+    summary: Increase Timeline and Home activity typography and simplify compact project navigation.
+    details: Activity content is easier to read without enlarging its containers, while the project dropdown lists projects only and the accessible TaskLens brand button returns to Overview.
+    tasks: [9]

@@ -1,6 +1,7 @@
-import { el } from "../lib/dom.js";
-import { num } from "../lib/format.js";
+import { el, svg, ICON } from "../lib/dom.js";
+import { dayDate, dayLabel, num } from "../lib/format.js";
 import { activeWorkCount, isActiveWorkTask } from "../lib/activity.js";
+import { groupTimelineNotes, timelineStateStore, updateCollapsedGroups } from "../lib/timeline.js";
 
 const HOME_LIMIT = 14;
 
@@ -47,23 +48,81 @@ export function recentEntries(backlog, limit = HOME_LIMIT, activeOnly = false) {
   return entries.sort((a, b) => b.note.date.localeCompare(a.note.date) || b.task.mtime - a.task.mtime).slice(0, limit);
 }
 
-function activityEntry({ task, note }) {
-  const colour = `var(--st-${task.status})`;
-  return el("div.project-activity", { title: `${task.number} · ${task.title}` },
-    el("span.project-activity-dot", { style: { background: colour } }),
-    el("div.project-activity-copy", null,
-      el("div.project-activity-head", null,
+export function recentGroups(backlog, limit = HOME_LIMIT, activeOnly = false) {
+  return groupTimelineNotes(recentEntries(backlog, limit, activeOnly)
+    .map(({ task, note }) => ({ ...note, task })));
+}
+
+function projectTaskGroup(backlog, group, openProject, rerender, collapsed, stateStore) {
+  const task = group.task;
+  const open = !collapsed.has(group.key);
+  const bodyId = `home-${backlog.id}-${group.key}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const setCollapsed = () => {
+    if (open) collapsed.add(group.key);
+    else collapsed.delete(group.key);
+    stateStore.write("timeline.collapsed", [...collapsed].sort());
+    rerender();
+  };
+
+  return el("section.project-task", null,
+    el("div.project-task-head", null,
+      el("button.project-task-toggle" + (open ? "" : ".closed"), {
+        title: `${open ? "Collapse" : "Expand"} ${task.number} ${task.title}`,
+        "aria-label": `${open ? "Collapse" : "Expand"} task ${task.number}`,
+        "aria-expanded": open,
+        "aria-controls": bodyId,
+        onclick: setCollapsed,
+      }, svg(ICON.chevronDown, { size: 12, stroke: "currentColor" })),
+      el("span.project-activity-dot", { style: { background: `var(--st-${task.status})` } }),
+      el("button.project-task-link", {
+        title: `Open ${task.number} ${task.title}`,
+        onclick: () => openProject(backlog.id, "task", task.id),
+      },
         el("span.project-activity-number", null, task.number),
         el("span.project-activity-title", null, task.title),
       ),
-      el("div.project-activity-note", null, note.text || "(no note text)"),
-      el("div.project-activity-meta", null, note.date, " · ", note.agent || task.agent),
+      el("span.project-task-count", null, num(group.notes.length)),
+    ),
+    el("div.project-task-notes", { id: bodyId, hidden: !open },
+      group.notes.map((note) => el("div.project-task-note", null,
+        el("div.project-activity-note", null, note.text || "(no note text)"),
+        el("div.project-activity-meta", null, note.agent || task.agent),
+      )),
     ),
   );
 }
 
-function activityPlane(backlog, open, activeOnly = false) {
-  const entries = recentEntries(backlog, HOME_LIMIT, activeOnly);
+function projectActivity(backlog, groups, openProject, rerender, emptyLabel) {
+  if (!groups.length) return el("div.project-activity-empty", null, emptyLabel);
+  const stateStore = timelineStateStore(backlog.meta.root);
+  const saved = stateStore.read("timeline.collapsed", []);
+  let collapsed = new Set(Array.isArray(saved) ? saved.filter((key) => typeof key === "string") : []);
+  const keys = groups.flatMap((day) => day.tasks.map((task) => task.key));
+  const allCollapsed = keys.length > 0 && keys.every((key) => collapsed.has(key));
+
+  return [
+    el("div.project-activity-tools", null,
+      el("span", null, `${num(keys.length)} TASK${keys.length === 1 ? "" : "S"}`),
+      el("button", {
+        onclick: () => {
+          collapsed = updateCollapsedGroups(collapsed, keys, !allCollapsed);
+          stateStore.write("timeline.collapsed", [...collapsed].sort());
+          rerender();
+        },
+      }, allCollapsed ? "EXPAND ALL" : "COLLAPSE ALL"),
+    ),
+    groups.map((day) => el("div.project-day", null,
+      el("div.project-day-head", null,
+        el("span", null, dayLabel(day.date)),
+        el("time", { datetime: day.date }, dayDate(day.date)),
+      ),
+      day.tasks.map((group) => projectTaskGroup(backlog, group, openProject, rerender, collapsed, stateStore)),
+    )),
+  ];
+}
+
+function activityPlane(backlog, open, activeOnly = false, rerender = () => {}) {
+  const groups = recentGroups(backlog, HOME_LIMIT, activeOnly);
   const { counts } = backlog.meta;
   const activeCount = active(backlog);
   return el("section.project-plane", null,
@@ -95,9 +154,13 @@ function activityPlane(backlog, open, activeOnly = false) {
         ],
     ),
     el("div.project-activity-list", null,
-      entries.length
-        ? entries.map(activityEntry)
-        : el("div.project-activity-empty", null, activeOnly ? "NO NOTES ON ACTIVE TASKS" : "NO AGENT NOTES YET"),
+      projectActivity(
+        backlog,
+        groups,
+        open,
+        rerender,
+        activeOnly ? "NO NOTES ON ACTIVE TASKS" : "NO AGENT NOTES YET",
+      ),
     ),
     el("button.project-plane-foot", { onclick: () => open(backlog.id, "timeline") },
       "OPEN TIMELINE", el("span", null, "→"),
@@ -136,7 +199,7 @@ export function renderOverview(
       ),
     ),
     visibleBacklogs.length
-      ? el("div.project-planes", null, visibleBacklogs.map((backlog) => activityPlane(backlog, open, activeOnly)))
+      ? el("div.project-planes", null, visibleBacklogs.map((backlog) => activityPlane(backlog, open, activeOnly, rerender)))
       : el("div.overview-active-empty", null, "NO ACTIVE TASKS TOUCHED IN THE LAST HOUR"),
     addBacklogForm(add, rerender, addBacklogState),
   );
